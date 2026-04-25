@@ -31,7 +31,7 @@ const _homeQuoteBaseWidth = 224.0;
 const _homeQuoteTextMaxScale = 1.14;
 const _homeBottomNavBaseHeight = 76.0;
 const _homeBottomNavBaseGap = 10.0;
-const _homeBottomNavMaxSafeInset = 8.0;
+const _homeBottomNavMaxSafeInset = 4.0;
 const _homeScrollExtraBottomSpacing = 40.0;
 
 double _homeLayoutScaleFor(double screenWidth) {
