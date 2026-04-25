@@ -68,6 +68,37 @@ void main() {
     expect(find.byKey(const Key('dhikr.start.subhanallah')), findsOneWidget);
   });
 
+  testWidgets('home bottom nav stays close to bottom with iPhone inset', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(393, 852),
+              padding: EdgeInsets.only(top: 47, bottom: 34),
+            ),
+            child: HomeScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final quickStartCenter = tester.getCenter(
+      find.byKey(const Key('home.quickStart')),
+    );
+
+    expect(quickStartCenter.dy, greaterThan(790));
+  });
+
   testWidgets('library selection opens counter and counter resets', (
     tester,
   ) async {

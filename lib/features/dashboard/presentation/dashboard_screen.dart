@@ -31,12 +31,21 @@ const _homeQuoteBaseWidth = 224.0;
 const _homeQuoteTextMaxScale = 1.14;
 const _homeBottomNavBaseHeight = 76.0;
 const _homeBottomNavBaseGap = 10.0;
+const _homeBottomNavMaxSafeInset = 8.0;
 const _homeScrollExtraBottomSpacing = 40.0;
 
 double _homeLayoutScaleFor(double screenWidth) {
   return (screenWidth / _homeDesignWidth)
       .clamp(_homeMinLayoutScale, _homeMaxLayoutScale)
       .toDouble();
+}
+
+double _homeBottomNavBottomOffset(double safeBottom, double scale) {
+  final visualSafeInset = math.min(
+    safeBottom,
+    _homeBottomNavMaxSafeInset * scale,
+  );
+  return _homeBottomNavBaseGap * scale + visualSafeInset;
 }
 
 class DashboardScreen extends StatelessWidget {
@@ -69,8 +78,8 @@ class HomeScreen extends StatelessWidget {
     final contentTop =
         safeTop + 95 * scale + quoteHeight + 18 * scale - contentLift;
     final bottomNavHeight = _homeBottomNavBaseHeight * scale;
-    final bottomNavGap = _homeBottomNavBaseGap * scale;
-    final bottomNavReservedHeight = bottomNavHeight + bottomNavGap + safeBottom;
+    final bottomNavOffset = _homeBottomNavBottomOffset(safeBottom, scale);
+    final bottomNavReservedHeight = bottomNavHeight + bottomNavOffset;
     final scrollBottomPadding =
         bottomNavReservedHeight + _homeScrollExtraBottomSpacing * scale;
 
@@ -1690,7 +1699,7 @@ class HomeBottomNav extends ConsumerWidget {
     return Positioned(
       left: 0,
       right: 0,
-      bottom: _homeBottomNavBaseGap * scale + safeBottom,
+      bottom: _homeBottomNavBottomOffset(safeBottom, scale),
       height: _homeBottomNavBaseHeight * scale,
       child: Center(
         child: SizedBox(
