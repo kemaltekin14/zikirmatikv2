@@ -123,7 +123,10 @@ Page<void> _platformPage(
     );
   }
 
-  return CupertinoPage<void>(key: state.pageKey, child: child);
+  return CupertinoPage<void>(
+    key: state.pageKey,
+    child: _EdgeSwipeBackPage(child: child),
+  );
 }
 
 class _EdgeSwipeBackPage extends StatefulWidget {
@@ -136,7 +139,7 @@ class _EdgeSwipeBackPage extends StatefulWidget {
 }
 
 class _EdgeSwipeBackPageState extends State<_EdgeSwipeBackPage> {
-  static const _edgeWidth = 28.0;
+  static const _edgeWidth = 52.0;
   static const _popDistance = 72.0;
   static const _popVelocity = 520.0;
 
