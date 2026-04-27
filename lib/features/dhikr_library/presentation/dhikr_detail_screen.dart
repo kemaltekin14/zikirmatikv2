@@ -173,7 +173,7 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
         .read(counterControllerProvider.notifier)
         .startDhikr(item, target: _selectedTarget);
     ref.read(interactionFeedbackServiceProvider).primaryAction();
-    context.go(AppRoutes.counter);
+    context.push(AppRoutes.counter);
   }
 
   void _selectTarget(int target) {

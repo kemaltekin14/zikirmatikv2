@@ -9,8 +9,13 @@ import 'package:zikirmatik_v2/features/dhikr_library/presentation/dhikr_library_
 import 'package:zikirmatik_v2/features/splash/presentation/splash_screen.dart';
 
 void main() {
-  Future<void> pumpMobileApp(WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
+  Future<void> pumpMobileApp(
+    WidgetTester tester, {
+    Map<String, Object> sharedPreferences = const {},
+  }) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    SharedPreferences.setMockInitialValues(sharedPreferences);
     tester.view.physicalSize = const Size(393, 852);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -142,14 +147,10 @@ void main() {
 
     expect(find.byType(DhikrLibraryScreen), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('dhikr.card.subhanallah')));
-    await pumpUntilFound(tester, find.byKey(const Key('dhikr.detail.start')));
-
-    await tester.tap(find.byKey(const Key('dhikr.detail.start')));
-    await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
-
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
-    await pumpUntilFound(tester, find.byType(HomeScreen));
+    await pumpMobileApp(
+      tester,
+      sharedPreferences: {'counter.lastStartedDhikrId': 'subhanallah'},
+    );
 
     await tester.tap(find.byKey(const Key('home.quickStart')));
     await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));

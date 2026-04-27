@@ -19,7 +19,13 @@ class CounterScreen extends ConsumerWidget {
       leading: IconButton(
         tooltip: 'Ana sayfaya dön',
         icon: const Icon(Icons.arrow_back_rounded),
-        onPressed: () => context.go(AppRoutes.dashboard),
+        onPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(AppRoutes.dashboard);
+          }
+        },
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -513,7 +513,7 @@ class TodayZikrCard extends ConsumerWidget {
             icon: Icons.auto_awesome_rounded,
             onPressed: () {
               final feedback = ref.read(interactionFeedbackServiceProvider);
-              context.go(AppRoutes.esma);
+              context.push(AppRoutes.esma);
               feedback.selection();
             },
           ),
@@ -983,7 +983,7 @@ class StartZikrCard extends ConsumerWidget {
             ),
             onPressed: () {
               final feedback = ref.read(interactionFeedbackServiceProvider);
-              context.go(AppRoutes.dhikrLibrary);
+              context.push(AppRoutes.dhikrLibrary);
               feedback.primaryAction();
             },
           ),
@@ -1405,7 +1405,7 @@ class ContinueZikrCard extends ConsumerWidget {
             target: entry.target,
             initialCount: entry.completed ? 0 : entry.count,
           );
-      context.go(AppRoutes.counter);
+      context.push(AppRoutes.counter);
       feedback.primaryAction();
     }
 
@@ -2095,19 +2095,29 @@ class HomeBottomNav extends ConsumerWidget {
     }
     final feedback = ref.read(interactionFeedbackServiceProvider);
 
-    void goWithSelectionFeedback(String route) {
-      context.go(route);
+    void openRouteWithSelectionFeedback(String route) {
+      final currentPath = GoRouterState.of(context).uri.path;
+      if (route == currentPath) {
+        feedback.selection();
+        return;
+      }
+
+      if (route == AppRoutes.dashboard) {
+        context.go(route);
+      } else {
+        context.push(route);
+      }
       feedback.selection();
     }
 
     void handleQuickStart() {
       if (quickStartDhikr == null) {
-        context.go(AppRoutes.dhikrLibrary);
+        context.push(AppRoutes.dhikrLibrary);
         feedback.primaryAction();
         return;
       }
       ref.read(counterControllerProvider.notifier).startDhikr(quickStartDhikr);
-      context.go(AppRoutes.counter);
+      context.push(AppRoutes.counter);
       feedback.primaryAction();
     }
 
@@ -2166,7 +2176,7 @@ class HomeBottomNav extends ConsumerWidget {
                         active:
                             activeDestination == HomeBottomNavDestination.home,
                         onTap: () =>
-                            goWithSelectionFeedback(AppRoutes.dashboard),
+                            openRouteWithSelectionFeedback(AppRoutes.dashboard),
                       ),
                       _BottomNavItem(
                         scale: scale,
@@ -2175,8 +2185,9 @@ class HomeBottomNav extends ConsumerWidget {
                         active:
                             activeDestination ==
                             HomeBottomNavDestination.dhikrLibrary,
-                        onTap: () =>
-                            goWithSelectionFeedback(AppRoutes.dhikrLibrary),
+                        onTap: () => openRouteWithSelectionFeedback(
+                          AppRoutes.dhikrLibrary,
+                        ),
                       ),
                       _QuickStartNavButton(
                         scale: scale,
@@ -2190,7 +2201,8 @@ class HomeBottomNav extends ConsumerWidget {
                         label: 'Esma-ül Hüsna',
                         active:
                             activeDestination == HomeBottomNavDestination.esma,
-                        onTap: () => goWithSelectionFeedback(AppRoutes.esma),
+                        onTap: () =>
+                            openRouteWithSelectionFeedback(AppRoutes.esma),
                       ),
                       _BottomNavItem(
                         scale: scale,
@@ -2199,8 +2211,9 @@ class HomeBottomNav extends ConsumerWidget {
                         active:
                             activeDestination ==
                             HomeBottomNavDestination.statistics,
-                        onTap: () =>
-                            goWithSelectionFeedback(AppRoutes.statistics),
+                        onTap: () => openRouteWithSelectionFeedback(
+                          AppRoutes.statistics,
+                        ),
                       ),
                     ],
                   ),

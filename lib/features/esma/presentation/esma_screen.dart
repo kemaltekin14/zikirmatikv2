@@ -140,7 +140,7 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
   void _startEsma(EsmaItem item) {
     final feedback = ref.read(interactionFeedbackServiceProvider);
     ref.read(counterControllerProvider.notifier).startDhikr(item.toDhikr());
-    context.go(AppRoutes.counter);
+    context.push(AppRoutes.counter);
     feedback.primaryAction();
   }
 }

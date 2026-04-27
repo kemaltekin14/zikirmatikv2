@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -116,30 +117,61 @@ Page<void> _platformPage(
       platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
 
   if (!isCupertinoPlatform) {
-    return MaterialPage<void>(key: state.pageKey, child: child);
+    return MaterialPage<void>(
+      key: state.pageKey,
+      child: _EdgeSwipeBackPage(child: child),
+    );
   }
 
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    child: child,
-    transitionDuration: const Duration(milliseconds: 300),
-    reverseTransitionDuration: const Duration(milliseconds: 260),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
+  return CupertinoPage<void>(key: state.pageKey, child: child);
+}
 
-      return SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(curved),
-        child: child,
-      );
-    },
-  );
+class _EdgeSwipeBackPage extends StatefulWidget {
+  const _EdgeSwipeBackPage({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_EdgeSwipeBackPage> createState() => _EdgeSwipeBackPageState();
+}
+
+class _EdgeSwipeBackPageState extends State<_EdgeSwipeBackPage> {
+  static const _edgeWidth = 28.0;
+  static const _popDistance = 72.0;
+  static const _popVelocity = 520.0;
+
+  double _dragDistance = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        Positioned(
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: _edgeWidth,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragStart: (_) => _dragDistance = 0,
+            onHorizontalDragUpdate: (details) {
+              _dragDistance += details.primaryDelta ?? 0;
+            },
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              final shouldPop =
+                  _dragDistance > _popDistance || velocity > _popVelocity;
+              if (shouldPop && context.canPop()) {
+                context.pop();
+              }
+              _dragDistance = 0;
+            },
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class AppRouteNames {
