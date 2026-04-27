@@ -17,7 +17,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const ProviderScope(child: ZikirmatikApp()));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(milliseconds: 4650));
     await tester.pump(const Duration(milliseconds: 850));
     for (
       var i = 0;
@@ -65,7 +65,7 @@ void main() {
     await pumpUntilFound(tester, find.byType(DhikrLibraryScreen));
 
     expect(find.byType(DhikrLibraryScreen), findsOneWidget);
-    expect(find.byKey(const Key('dhikr.start.subhanallah')), findsOneWidget);
+    expect(find.byKey(const Key('dhikr.card.subhanallah')), findsOneWidget);
   });
 
   testWidgets('home bottom nav stays close to bottom with iPhone inset', (
@@ -91,6 +91,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
 
     final quickStartCenter = tester.getCenter(
       find.byKey(const Key('home.quickStart')),
@@ -107,10 +108,13 @@ void main() {
     await tester.tap(find.byKey(const Key('home.chooseDhikr')));
     await pumpUntilFound(
       tester,
-      find.byKey(const Key('dhikr.start.subhanallah')),
+      find.byKey(const Key('dhikr.card.subhanallah')),
     );
 
-    await tester.tap(find.byKey(const Key('dhikr.start.subhanallah')));
+    await tester.tap(find.byKey(const Key('dhikr.card.subhanallah')));
+    await pumpUntilFound(tester, find.byKey(const Key('dhikr.detail.start')));
+
+    await tester.tap(find.byKey(const Key('dhikr.detail.start')));
     await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
 
     expect(find.byType(CounterScreen), findsOneWidget);
@@ -138,7 +142,10 @@ void main() {
 
     expect(find.byType(DhikrLibraryScreen), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('dhikr.start.subhanallah')));
+    await tester.tap(find.byKey(const Key('dhikr.card.subhanallah')));
+    await pumpUntilFound(tester, find.byKey(const Key('dhikr.detail.start')));
+
+    await tester.tap(find.byKey(const Key('dhikr.detail.start')));
     await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
 
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));

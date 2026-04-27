@@ -45,6 +45,13 @@ class DhikrRepository {
       meaning: meaning,
     );
   }
+
+  Future<void> setCustomDhikrFavorite({
+    required String id,
+    required bool isFavorite,
+  }) {
+    return _database.setCustomDhikrFavorite(id: id, isFavorite: isFavorite);
+  }
 }
 
 DhikrItem _recordToDhikr(DhikrRecord record) {

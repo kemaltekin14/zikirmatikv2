@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/counter/presentation/counter_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/dhikr_library/presentation/dhikr_detail_screen.dart';
 import '../../features/dhikr_library/presentation/dhikr_library_screen.dart';
 import '../../features/esma/presentation/esma_screen.dart';
 import '../../features/namaz_tesbihati/presentation/namaz_tesbihati_screen.dart';
@@ -45,6 +46,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AppRouteNames.dhikrLibrary,
         pageBuilder: (context, state) =>
             _platformPage(context, state, const DhikrLibraryScreen()),
+      ),
+      GoRoute(
+        path: '/zikirler/:dhikrId',
+        name: AppRouteNames.dhikrDetail,
+        pageBuilder: (context, state) => _platformPage(
+          context,
+          state,
+          DhikrDetailScreen(dhikrId: state.pathParameters['dhikrId'] ?? ''),
+        ),
       ),
       GoRoute(
         path: '/esma',
@@ -139,6 +149,7 @@ class AppRouteNames {
   static const dashboard = 'dashboard';
   static const counter = 'counter';
   static const dhikrLibrary = 'dhikrLibrary';
+  static const dhikrDetail = 'dhikrDetail';
   static const esma = 'esma';
   static const namazTesbihati = 'namazTesbihati';
   static const vird = 'vird';
@@ -154,6 +165,7 @@ class AppRoutes {
   static const dashboard = '/';
   static const counter = '/sayac';
   static const dhikrLibrary = '/zikirler';
+  static String dhikrDetail(String dhikrId) => '/zikirler/$dhikrId';
   static const esma = '/esma';
   static const namazTesbihati = '/namaz-tesbihati';
   static const vird = '/vird';

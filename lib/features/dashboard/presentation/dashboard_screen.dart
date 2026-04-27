@@ -8,11 +8,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_router.dart';
+import '../../../core/data/local/app_database.dart';
+import '../../../core/data/local/database_provider.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../counter/application/counter_controller.dart';
 import '../../dhikr_library/application/dhikr_providers.dart';
 import '../../dhikr_library/data/builtin_dhikrs.dart';
 import '../../dhikr_library/domain/dhikr_item.dart';
+import '../../../shared/layout/proportional_layout.dart';
 
 const _pageBackground = Color(0xFFE9EEE4);
 const _primaryGreen = Color(0xFF13472F);
@@ -22,10 +25,9 @@ const _cardBackground = Color(0xFFFAFAF4);
 const _dividerColor = Color(0xFFDDE4D9);
 const _primaryText = Color(0xFF123B2B);
 const _secondaryText = Color(0xFF69766E);
+const _brandWordmarkGreen = Color(0xFF114B35);
+const _brandWordmarkSuffixGreen = Color(0xFF828C6F);
 
-const _homeDesignWidth = 393.0;
-const _homeMinLayoutScale = 0.92;
-const _homeMaxLayoutScale = 1.18;
 const _homeQuoteBaseHeight = 72.0;
 const _homeQuoteBaseWidth = 224.0;
 const _homeQuoteTextMaxScale = 1.14;
@@ -33,12 +35,8 @@ const _homeBottomNavBaseHeight = 76.0;
 const _homeBottomNavBaseGap = 10.0;
 const _homeBottomNavMaxSafeInset = 4.0;
 const _homeScrollExtraBottomSpacing = 40.0;
-
-double _homeLayoutScaleFor(double screenWidth) {
-  return (screenWidth / _homeDesignWidth)
-      .clamp(_homeMinLayoutScale, _homeMaxLayoutScale)
-      .toDouble();
-}
+const _todayEsmaCardBackgroundAsset =
+    'assets/images/today_esma_card_background.png';
 
 double _homeBottomNavBottomOffset(double safeBottom, double scale) {
   final visualSafeInset = math.min(
@@ -64,8 +62,8 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final screenWidth = media.size.width;
-    final scale = _homeLayoutScaleFor(screenWidth);
-    final contentWidth = math.min(screenWidth, _homeDesignWidth * scale);
+    final scale = proportionalLayoutScaleFor(screenWidth);
+    final contentWidth = math.min(screenWidth, appLayoutBaselineWidth * scale);
     final contentLeft = (screenWidth - contentWidth) / 2;
     final safeTop = media.padding.top;
     final safeBottom = media.padding.bottom;
@@ -139,7 +137,7 @@ class HomeScreen extends StatelessWidget {
                           ),
                           SizedBox(height: 16 * scale),
                           ContinueZikrCard(scale: scale),
-                          SizedBox(height: 18 * scale),
+                          SizedBox(height: 14 * scale),
                           CategoryZikrSection(scale: scale),
                         ],
                       ),
@@ -152,6 +150,7 @@ class HomeScreen extends StatelessWidget {
                 left: menuLeft,
                 size: menuSize,
                 iconSize: menuIconSize,
+                scale: scale,
               ),
               HomeBottomNav(scale: scale, contentWidth: contentWidth),
             ],
@@ -198,11 +197,7 @@ class MosqueHeroLayer extends StatelessWidget {
             final heroContentLeft = (heroWidth - heroContentWidth) / 2;
             final mosqueWidth = heroWidth * 1.12;
             final menuLeftInContent = menuLeft - heroContentLeft;
-            final menuRight = menuLeftInContent + menuSize;
-            final quoteLeft = math.max(
-              menuRight + 8 * scale,
-              heroContentWidth * 0.16,
-            );
+            final quoteLeft = menuLeftInContent;
             final availableQuoteWidth = math.max(
               0.0,
               heroContentWidth - quoteLeft - 18 * scale,
@@ -211,7 +206,7 @@ class MosqueHeroLayer extends StatelessWidget {
               _homeQuoteBaseWidth * scale,
               availableQuoteWidth,
             );
-            final quoteTop = safeTop + 4 * scale;
+            final quoteTop = safeTop + 4 * scale + menuSize + 12 * scale;
 
             return Stack(
               fit: StackFit.expand,
@@ -257,23 +252,80 @@ class HeaderActions extends StatelessWidget {
     required this.left,
     required this.size,
     required this.iconSize,
+    required this.scale,
   });
 
   final double top;
   final double left;
   final double size;
   final double iconSize;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
       top: top,
       left: left,
-      child: _CircleActionButton(
-        size: size,
-        icon: Icons.menu_rounded,
-        iconSize: iconSize,
-        onPressed: () {},
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _CircleActionButton(
+            size: size,
+            icon: Icons.menu_rounded,
+            iconSize: iconSize,
+            onPressed: () {},
+          ),
+          SizedBox(width: 14 * scale),
+          DashboardBrandWordmark(scale: scale, height: size),
+        ],
+      ),
+    );
+  }
+}
+
+class DashboardBrandWordmark extends StatelessWidget {
+  const DashboardBrandWordmark({
+    super.key,
+    required this.scale,
+    required this.height,
+  });
+
+  final double scale;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 160 * scale,
+      height: height,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: RichText(
+          maxLines: 1,
+          textAlign: TextAlign.left,
+          textScaler: TextScaler.noScaling,
+          text: TextSpan(
+            style: TextStyle(
+              color: _brandWordmarkGreen,
+              fontFamily: 'EB Garamond',
+              fontSize: 45 * scale,
+              fontWeight: FontWeight.w500,
+              height: 59 / 45,
+            ),
+            children: const [
+              TextSpan(text: 'Zikirmatik'),
+              TextSpan(
+                text: '.pro',
+                style: TextStyle(
+                  color: _brandWordmarkSuffixGreen,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -325,7 +377,7 @@ class CompactHeroQuoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(22 * scale);
     final textScale = scale
-        .clamp(_homeMinLayoutScale, _homeQuoteTextMaxScale)
+        .clamp(appLayoutMinScale, _homeQuoteTextMaxScale)
         .toDouble();
     final mainQuoteSize = 11.8 * textScale;
     final authorSize = 10.2 * textScale;
@@ -487,7 +539,6 @@ class _TodayEsmaCardSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderRadius = BorderRadius.circular(radius);
-    final ornamentSize = height * 0.52;
 
     return Container(
       height: height,
@@ -512,16 +563,7 @@ class _TodayEsmaCardSurface extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: borderRadius,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFFFFFCF3),
-                const Color(0xFFF8F0DE),
-                const Color(0xFFEFF4EA),
-              ],
-              stops: const [0.0, 0.55, 1.0],
-            ),
+            color: const Color(0xFFFFFCF3),
             border: Border.all(
               color: Colors.white.withValues(alpha: 0.58),
               width: 0.6,
@@ -530,23 +572,16 @@ class _TodayEsmaCardSurface extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              CustomPaint(painter: _TodayParchmentTexturePainter()),
-              Positioned(
-                top: -26 * (height / 238),
-                right: -ornamentSize * 0.55,
-                child: _TodayOrnamentWatermark(
-                  size: ornamentSize,
-                  opacity: 0.062,
-                  angle: -0.10,
-                ),
-              ),
-              Positioned(
-                left: -34 * (height / 238),
-                bottom: 28 * (height / 238),
-                child: _TodayOrnamentWatermark(
-                  size: ornamentSize * 0.74,
-                  opacity: 0.045,
-                  angle: 0.18,
+              Transform.translate(
+                offset: Offset(0, -3 * (height / 238)),
+                child: Transform.scale(
+                  scaleX: 1.08,
+                  scaleY: 1.05,
+                  child: Image.asset(
+                    _todayEsmaCardBackgroundAsset,
+                    fit: BoxFit.fill,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
               ),
               DecoratedBox(
@@ -591,81 +626,6 @@ class _TodayEsmaCardSurface extends StatelessWidget {
               ),
               Padding(padding: padding, child: child),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TodayParchmentTexturePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final speckPaint = Paint()..style = PaintingStyle.fill;
-    for (var i = 0; i < 78; i++) {
-      final xSeed = (i * 37 + 17) % 101;
-      final ySeed = (i * 53 + 29) % 97;
-      final x = size.width * xSeed / 101;
-      final y = size.height * ySeed / 97;
-      final radius = size.shortestSide * (0.0015 + ((i % 4) * 0.00055));
-      final alpha = 0.018 + (i % 5) * 0.004;
-      speckPaint.color =
-          (i.isEven ? const Color(0xFF8D7C55) : const Color(0xFF315E43))
-              .withValues(alpha: alpha);
-      canvas.drawCircle(Offset(x, y), radius, speckPaint);
-    }
-
-    final fiberPaint = Paint()
-      ..color = const Color(0xFFC8B785).withValues(alpha: 0.045)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(0.45, size.shortestSide * 0.002);
-    for (var i = 0; i < 9; i++) {
-      final y = size.height * (0.10 + i * 0.095);
-      final path = Path()
-        ..moveTo(size.width * -0.05, y)
-        ..cubicTo(
-          size.width * 0.25,
-          y + (i.isEven ? 3 : -2),
-          size.width * 0.55,
-          y + (i.isEven ? -2 : 3),
-          size.width * 1.05,
-          y + (i.isEven ? 2 : -3),
-        );
-      canvas.drawPath(path, fiberPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _TodayOrnamentWatermark extends StatelessWidget {
-  const _TodayOrnamentWatermark({
-    required this.size,
-    required this.opacity,
-    required this.angle,
-  });
-
-  final double size;
-  final double opacity;
-  final double angle;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Opacity(
-        opacity: opacity,
-        child: Transform.rotate(
-          angle: angle,
-          child: SvgPicture.asset(
-            'assets/images/islamic_geometric_ornament_vector.svg',
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            colorFilter: const ColorFilter.mode(
-              Color(0xFFB79855),
-              BlendMode.srcIn,
-            ),
           ),
         ),
       ),
@@ -1409,16 +1369,69 @@ class _BeadsIconPainter extends CustomPainter {
   }
 }
 
-class ContinueZikrCard extends StatelessWidget {
+class ContinueZikrCard extends ConsumerWidget {
   const ContinueZikrCard({super.key, required this.scale});
 
   final double scale;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyEntries = ref
+        .watch(_dashboardHistoryProvider)
+        .maybeWhen(
+          data: (entries) => entries.isEmpty ? _sampleHistoryEntries : entries,
+          orElse: () => _sampleHistoryEntries,
+        );
+    final visibleEntries = historyEntries.take(3).toList();
+    final feedback = ref.read(interactionFeedbackServiceProvider);
+
+    void openHistoryEntry(_HistoryEntry entry) {
+      final dhikrs = ref
+          .read(dhikrItemsProvider)
+          .maybeWhen(data: (items) => items, orElse: () => builtinDhikrs);
+      final dhikr =
+          _dhikrById(dhikrs, entry.dhikrId) ??
+          DhikrItem(
+            id: entry.dhikrId,
+            name: entry.title,
+            category: 'Geçmiş',
+            defaultTarget: entry.target <= 0 ? 33 : entry.target,
+          );
+
+      ref
+          .read(counterControllerProvider.notifier)
+          .startDhikr(
+            dhikr,
+            target: entry.target,
+            initialCount: entry.completed ? 0 : entry.count,
+          );
+      context.go(AppRoutes.counter);
+      feedback.primaryAction();
+    }
+
+    void showAllHistory() {
+      feedback.selection();
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.18),
+        builder: (sheetContext) {
+          return _HistorySheet(
+            scale: scale,
+            entries: historyEntries,
+            onEntryTap: (entry) {
+              Navigator.of(sheetContext).pop();
+              openHistoryEntry(entry);
+            },
+          );
+        },
+      );
+    }
+
     return _SectionCard(
       scale: scale,
-      height: 160 * scale,
+      height: 170 * scale,
       child: Column(
         children: [
           Row(
@@ -1431,114 +1444,514 @@ class ContinueZikrCard extends StatelessWidget {
               SizedBox(width: 11 * scale),
               Expanded(
                 child: Text(
-                  'Yarım Kalan Zikirler',
+                  'Geçmiş',
                   style: TextStyle(
                     color: _primaryText,
-                    fontSize: 15.8 * scale,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 16.6 * scale,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              _SeeAll(scale: scale),
+              _HistorySeeAllButton(scale: scale, onTap: showAllHistory),
             ],
           ),
-          SizedBox(height: 5 * scale),
-          _ContinueRow(
-            scale: scale,
-            title: 'Subhanallah',
-            count: '33 / 100',
-            progress: 0.33,
-          ),
-          _ContinueRow(
-            scale: scale,
-            title: 'Alhamdulillah',
-            count: '25 / 100',
-            progress: 0.25,
-          ),
-          _ContinueRow(
-            scale: scale,
-            title: 'Allahu Ekber',
-            count: '20 / 100',
-            progress: 0.20,
-            showDivider: false,
-          ),
+          SizedBox(height: 7 * scale),
+          for (var index = 0; index < visibleEntries.length; index++)
+            _HistoryRow(
+              scale: scale,
+              entry: visibleEntries[index],
+              showDivider: index != visibleEntries.length - 1,
+              onTap: () => openHistoryEntry(visibleEntries[index]),
+            ),
         ],
       ),
     );
   }
 }
 
-class _ContinueRow extends StatelessWidget {
-  const _ContinueRow({
-    required this.scale,
+final _dashboardHistoryProvider =
+    StreamProvider.autoDispose<List<_HistoryEntry>>((ref) {
+      return ref
+          .watch(appDatabaseProvider)
+          .watchCounterEvents()
+          .map(_historyEntriesFromEvents);
+    });
+
+class _HistoryEntry {
+  const _HistoryEntry({
+    required this.dhikrId,
     required this.title,
     required this.count,
-    required this.progress,
+    required this.target,
+    required this.completed,
+    required this.updatedAt,
+  });
+
+  final String dhikrId;
+  final String title;
+  final int count;
+  final int target;
+  final bool completed;
+  final DateTime updatedAt;
+
+  double get progress {
+    if (target <= 0) return 0;
+    return (count / target).clamp(0, 1).toDouble();
+  }
+
+  String get countLabel => target <= 0 ? '$count' : '$count / $target';
+  String get statusLabel => completed ? 'Tamamlandı' : 'Devam ediyor';
+}
+
+List<_HistoryEntry> _historyEntriesFromEvents(List<CounterEvent> events) {
+  final currentOpenEntries = <String, _HistoryEntry>{};
+  final currentStateResolved = <String>{};
+  final completedEntries = <_HistoryEntry>[];
+
+  for (final event in events) {
+    final completed =
+        event.target > 0 &&
+        (event.eventType == 'completed' || event.countAfter >= event.target);
+
+    if (completed) {
+      completedEntries.add(
+        _HistoryEntry(
+          dhikrId: event.dhikrId,
+          title: event.dhikrName,
+          count: event.target,
+          target: event.target,
+          completed: true,
+          updatedAt: event.createdAt,
+        ),
+      );
+    }
+
+    if (currentStateResolved.add(event.dhikrId)) {
+      final isOpen = event.countAfter > 0 && !completed;
+      if (isOpen) {
+        currentOpenEntries[event.dhikrId] = _HistoryEntry(
+          dhikrId: event.dhikrId,
+          title: event.dhikrName,
+          count: event.countAfter,
+          target: event.target,
+          completed: false,
+          updatedAt: event.createdAt,
+        );
+      }
+    }
+  }
+
+  final entries = <_HistoryEntry>[
+    ...currentOpenEntries.values,
+    ...completedEntries,
+  ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+  return entries;
+}
+
+List<_HistoryEntry> get _sampleHistoryEntries {
+  return [
+    _HistoryEntry(
+      dhikrId: 'subhanallah',
+      title: 'Subhanallah',
+      count: 33,
+      target: 100,
+      completed: false,
+      updatedAt: DateTime(2026),
+    ),
+    _HistoryEntry(
+      dhikrId: 'elhamdulillah',
+      title: 'Elhamdulillah',
+      count: 33,
+      target: 33,
+      completed: true,
+      updatedAt: DateTime(2026),
+    ),
+    _HistoryEntry(
+      dhikrId: 'allahu-ekber',
+      title: 'Allahu Ekber',
+      count: 99,
+      target: 99,
+      completed: true,
+      updatedAt: DateTime(2026),
+    ),
+  ];
+}
+
+class _HistorySeeAllButton extends StatelessWidget {
+  const _HistorySeeAllButton({required this.scale, required this.onTap});
+
+  final double scale;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _primaryGreen.withValues(alpha: 0.075),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.72),
+              width: 0.6 * scale,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 10 * scale,
+              vertical: 5 * scale,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Tümü',
+                  style: TextStyle(
+                    color: _primaryGreen,
+                    fontSize: 11.3 * scale,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+                SizedBox(width: 2 * scale),
+                Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  color: _primaryGreen,
+                  size: 16 * scale,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistorySheet extends StatelessWidget {
+  const _HistorySheet({
+    required this.scale,
+    required this.entries,
+    required this.onEntryTap,
+  });
+
+  final double scale;
+  final List<_HistoryEntry> entries;
+  final ValueChanged<_HistoryEntry> onEntryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final sheetMaxHeight = media.size.height * 0.62;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16 * scale,
+          0,
+          16 * scale,
+          14 * scale + media.padding.bottom,
+        ),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _cardBackground.withValues(alpha: 0.98),
+                borderRadius: BorderRadius.circular(26 * scale),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.76),
+                  width: 0.7 * scale,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 34 * scale,
+                    offset: Offset(0, 16 * scale),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16 * scale,
+                  10 * scale,
+                  14 * scale,
+                  12 * scale,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 38 * scale,
+                      height: 4 * scale,
+                      decoration: BoxDecoration(
+                        color: _dividerColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    SizedBox(height: 12 * scale),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.history_rounded,
+                          color: _secondaryText,
+                          size: 22 * scale,
+                        ),
+                        SizedBox(width: 9 * scale),
+                        Expanded(
+                          child: Text(
+                            'Geçmiş',
+                            style: TextStyle(
+                              color: _primaryText,
+                              fontSize: 17 * scale,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        _HistorySheetCloseButton(scale: scale),
+                      ],
+                    ),
+                    SizedBox(height: 8 * scale),
+                    Flexible(
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        physics: const BouncingScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) {
+                          return _HistoryRow(
+                            scale: scale,
+                            entry: entries[index],
+                            showDivider: index != entries.length - 1,
+                            onTap: () => onEntryTap(entries[index]),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistorySheetCloseButton extends StatelessWidget {
+  const _HistorySheetCloseButton({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 30 * scale,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        tooltip: 'Kapat',
+        icon: Icon(
+          Icons.close_rounded,
+          color: _secondaryText,
+          size: 20 * scale,
+        ),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({
+    required this.scale,
+    required this.entry,
+    required this.onTap,
     this.showDivider = true,
   });
 
   final double scale;
-  final String title;
-  final String count;
-  final double progress;
+  final _HistoryEntry entry;
+  final VoidCallback onTap;
   final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 26 * scale,
-      child: Row(
-        children: [
-          CircularZikrProgress(
-            progress: progress,
-            size: 24 * scale,
-            strokeWidth: 4 * scale,
-          ),
-          SizedBox(width: 13 * scale),
-          Expanded(
-            child: Container(
-              height: double.infinity,
-              decoration: BoxDecoration(
-                border: showDivider
-                    ? Border(
-                        bottom: BorderSide(
-                          color: _dividerColor,
-                          width: 0.8 * scale,
-                        ),
-                      )
-                    : null,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        color: _primaryText,
-                        fontSize: 14.3 * scale,
-                        fontWeight: FontWeight.w500,
+    final accent = entry.completed ? const Color(0xFFB99A55) : _buttonGreen;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14 * scale),
+        onTap: onTap,
+        child: SizedBox(
+          height: 34 * scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: showDivider
+                  ? Border(
+                      bottom: BorderSide(
+                        color: _dividerColor.withValues(alpha: 0.84),
+                        width: 0.8 * scale,
                       ),
-                    ),
+                    )
+                  : null,
+            ),
+            child: Row(
+              children: [
+                _HistoryStatusMark(
+                  scale: scale,
+                  completed: entry.completed,
+                  accent: accent,
+                ),
+                SizedBox(width: 9 * scale),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              entry.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _primaryText,
+                                fontSize: 13.1 * scale,
+                                fontWeight: FontWeight.w600,
+                                height: 1.05,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8 * scale),
+                          Text(
+                            entry.countLabel,
+                            style: TextStyle(
+                              color: _primaryText.withValues(alpha: 0.88),
+                              fontSize: 12.0 * scale,
+                              fontWeight: FontWeight.w600,
+                              height: 1.05,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 3.5 * scale),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _HistoryProgressStrip(
+                              scale: scale,
+                              progress: entry.progress,
+                              accent: accent,
+                            ),
+                          ),
+                          SizedBox(width: 8 * scale),
+                          Text(
+                            entry.statusLabel,
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 10.1 * scale,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  Text(
-                    count,
-                    style: TextStyle(
-                      color: _primaryText,
-                      fontSize: 14 * scale,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(width: 12 * scale),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: _secondaryText,
-                    size: 23 * scale,
-                  ),
-                ],
-              ),
+                ),
+                SizedBox(width: 5 * scale),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: _secondaryText.withValues(alpha: 0.64),
+                  size: 18 * scale,
+                ),
+              ],
             ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryStatusMark extends StatelessWidget {
+  const _HistoryStatusMark({
+    required this.scale,
+    required this.completed,
+    required this.accent,
+  });
+
+  final double scale;
+  final bool completed;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: accent.withValues(alpha: completed ? 0.15 : 0.10),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.76),
+          width: 0.7 * scale,
+        ),
+      ),
+      child: SizedBox.square(
+        dimension: 24 * scale,
+        child: Icon(
+          completed ? Icons.check_rounded : Icons.play_arrow_rounded,
+          color: accent,
+          size: 15 * scale,
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryProgressStrip extends StatelessWidget {
+  const _HistoryProgressStrip({
+    required this.scale,
+    required this.progress,
+    required this.accent,
+  });
+
+  final double scale;
+  final double progress;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: SizedBox(
+        height: 3.4 * scale,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: const Color(0xFFE3E9DF)),
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: progress,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [accent.withValues(alpha: 0.72), accent],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1654,11 +2067,13 @@ class HomeBottomNav extends ConsumerWidget {
     required this.scale,
     required this.contentWidth,
     this.activeDestination = HomeBottomNavDestination.home,
+    this.quickStartKey = const Key('home.quickStart'),
   });
 
   final double scale;
   final double contentWidth;
   final HomeBottomNavDestination activeDestination;
+  final Key quickStartKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1766,6 +2181,7 @@ class HomeBottomNav extends ConsumerWidget {
                       _QuickStartNavButton(
                         scale: scale,
                         hasDhikr: quickStartDhikr != null,
+                        buttonKey: quickStartKey,
                         onPressed: handleQuickStart,
                       ),
                       _BottomNavItem(
@@ -1812,11 +2228,13 @@ class _QuickStartNavButton extends StatefulWidget {
   const _QuickStartNavButton({
     required this.scale,
     required this.hasDhikr,
+    required this.buttonKey,
     required this.onPressed,
   });
 
   final double scale;
   final bool hasDhikr;
+  final Key buttonKey;
   final VoidCallback onPressed;
 
   @override
@@ -1942,7 +2360,7 @@ class _QuickStartNavButtonState extends State<_QuickStartNavButton>
                             color: Colors.transparent,
                             shape: const CircleBorder(),
                             child: InkWell(
-                              key: const Key('home.quickStart'),
+                              key: widget.buttonKey,
                               customBorder: const CircleBorder(),
                               onTap: _handlePressed,
                               child: DecoratedBox(

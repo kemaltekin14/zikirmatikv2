@@ -31,6 +31,8 @@ class _SplashScreenState extends State<SplashScreen>
   static const _dashboardHeroImage = AssetImage(
     'assets/images/home_mosque.png',
   );
+  static const _splashDuration = Duration(milliseconds: 4650);
+  static const _transitionDuration = Duration(milliseconds: 850);
 
   late final AnimationController _controller;
   late final AnimationController _transitionController;
@@ -38,13 +40,10 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    );
+    _controller = AnimationController(vsync: this, duration: _splashDuration);
     _transitionController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 850),
+      duration: _transitionDuration,
     );
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {

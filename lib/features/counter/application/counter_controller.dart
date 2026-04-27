@@ -52,11 +52,19 @@ class CounterController extends Notifier<CounterState> {
     );
   }
 
-  void startDhikr(DhikrItem dhikr, {int? target}) {
+  void startDhikr(DhikrItem dhikr, {int? target, int initialCount = 0}) {
+    final resolvedTarget = target ?? dhikr.defaultTarget;
+    final positiveInitialCount = initialCount < 0 ? 0 : initialCount;
+    final resolvedCount =
+        resolvedTarget > 0 && positiveInitialCount > resolvedTarget
+        ? resolvedTarget
+        : positiveInitialCount;
+
     state = CounterState(
       activeDhikr: dhikr,
-      count: 0,
-      target: target ?? dhikr.defaultTarget,
+      count: resolvedCount,
+      target: resolvedTarget,
+      completed: resolvedTarget > 0 && resolvedCount >= resolvedTarget,
     );
     ref.read(lastStartedDhikrIdProvider.notifier).remember(dhikr.id);
     unawaited(

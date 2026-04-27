@@ -122,6 +122,21 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Future<void> setCustomDhikrFavorite({
+    required String id,
+    required bool isFavorite,
+  }) {
+    return (update(dhikrRecords)..where(
+          (table) => table.id.equals(id) & table.isBuiltIn.equals(false),
+        ))
+        .write(
+          DhikrRecordsCompanion(
+            isFavorite: Value(isFavorite),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+  }
+
   Future<void> logCounterEvent({
     required String dhikrId,
     required String dhikrName,
