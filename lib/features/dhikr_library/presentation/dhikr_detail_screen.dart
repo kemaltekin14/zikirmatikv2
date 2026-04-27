@@ -24,11 +24,12 @@ const _transliterationGold = Color(0xFF9A7225);
 const _mutedGreen = Color(0xFF69766E);
 const _referenceSurface = Color(0xFFF8F2E8);
 const _referenceSurfaceTop = Color(0xFFFFFCF6);
+const _meaningCardSurface = Color(0xFFFBF8F1);
 const _referenceBorder = Color(0xFFE0CF9B);
 const _gold = Color(0xFFD4BA75);
 const _goldText = Color(0xFF80652B);
 const _fixedTargetOptions = [33, 99, 100];
-const _detailTopBackgroundAsset = 'assets/images/zikirarka2.webp';
+const _detailTopBackgroundAsset = 'assets/images/zikir-arka2.webp';
 const _meaningCardBackgroundAsset = 'assets/images/tablo-arka.webp';
 
 class DhikrDetailScreen extends ConsumerStatefulWidget {
@@ -457,7 +458,7 @@ class _InfoCard extends StatelessWidget {
       scale: scale,
       backgroundAsset: _meaningCardBackgroundAsset,
       backgroundOpacity: 0.94,
-      backgroundBaseColor: const Color(0xFFFBF8F1),
+      backgroundBaseColor: _meaningCardSurface,
       backgroundFit: BoxFit.fitWidth,
       backgroundAlignment: Alignment.bottomRight,
       backgroundOverflowBottom: 15 * scale,
@@ -872,14 +873,7 @@ class _StickyActionPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(24 * scale),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _referenceSurfaceTop.withValues(alpha: 0.98),
-                _referenceSurface.withValues(alpha: 0.98),
-              ],
-            ),
+            color: _meaningCardSurface,
             border: Border.all(color: _referenceBorder.withValues(alpha: 0.32)),
           ),
           child: Column(
