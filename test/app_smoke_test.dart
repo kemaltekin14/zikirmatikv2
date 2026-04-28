@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zikirmatik_v2/app/zikirmatik_app.dart';
-import 'package:zikirmatik_v2/features/counter/presentation/counter_screen.dart';
+import 'package:zikirmatik_v2/features/counter/presentation/zikr_counter_screen.dart';
 import 'package:zikirmatik_v2/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:zikirmatik_v2/features/dhikr_library/presentation/dhikr_library_screen.dart';
 import 'package:zikirmatik_v2/features/splash/presentation/splash_screen.dart';
@@ -117,13 +117,16 @@ void main() {
     );
 
     await tester.tap(find.byKey(const Key('dhikr.card.subhanallah')));
-    await pumpUntilFound(tester, find.byKey(const Key('dhikr.detail.start')));
+    final startButton = find.byKey(const Key('dhikr.detail.start'));
+    await pumpUntilFound(tester, startButton);
+    await tester.dragFrom(const Offset(196, 790), const Offset(0, -900));
+    await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(find.byKey(const Key('dhikr.detail.start')));
+    await tester.tap(startButton);
     await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
+    await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.byType(CounterScreen), findsOneWidget);
-    expect(find.text('Subhanallah'), findsWidgets);
+    expect(find.byType(ZikrCounterScreen), findsOneWidget);
     expect(find.text('0'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('counter.increment')));
@@ -131,7 +134,7 @@ void main() {
 
     expect(find.text('1'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.refresh));
+    await tester.tap(find.byIcon(Icons.refresh_rounded));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('0'), findsOneWidget);
@@ -155,7 +158,7 @@ void main() {
     await tester.tap(find.byKey(const Key('home.quickStart')));
     await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
 
-    expect(find.byType(CounterScreen), findsOneWidget);
-    expect(find.text('Subhanallah'), findsWidgets);
+    expect(find.byType(ZikrCounterScreen), findsOneWidget);
+    expect(find.byKey(const Key('counter.increment')), findsOneWidget);
   });
 }

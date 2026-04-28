@@ -20,7 +20,9 @@ const _buttonGreen = Color(0xFF327653);
 const _targetGreen = Color(0xFF16583B);
 const _targetGreenTop = Color(0xFF1B6A47);
 const _arabicHeroGreen = Color(0xFF064934);
-const _transliterationGold = Color(0xFF9A7225);
+const _transliterationGold = Color(0xFFB8892E);
+const _transliterationGoldHighlight = Color(0xFFE3C36A);
+const _transliterationGoldShadow = Color(0xFF8A621F);
 const _mutedGreen = Color(0xFF69766E);
 const _referenceSurface = Color(0xFFF8F2E8);
 const _referenceSurfaceTop = Color(0xFFFFFCF6);
@@ -29,13 +31,19 @@ const _referenceBorder = Color(0xFFE0CF9B);
 const _gold = Color(0xFFD4BA75);
 const _goldText = Color(0xFF80652B);
 const _fixedTargetOptions = [33, 99, 100];
-const _detailTopBackgroundAsset = 'assets/images/zikir-arka2.webp';
+const _detailTopBackgroundAsset = 'assets/images/zikir-arka3.webp';
 const _meaningCardBackgroundAsset = 'assets/images/tablo-arka.webp';
+const _sheetDismissToCounterDelay = Duration(milliseconds: 420);
 
 class DhikrDetailScreen extends ConsumerStatefulWidget {
-  const DhikrDetailScreen({super.key, required this.dhikrId});
+  const DhikrDetailScreen({
+    super.key,
+    required this.dhikrId,
+    this.sheetMode = false,
+  });
 
   final String dhikrId;
+  final bool sheetMode;
 
   @override
   ConsumerState<DhikrDetailScreen> createState() => _DhikrDetailScreenState();
@@ -54,7 +62,103 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
     final textScale = media.textScaler.scale(1).clamp(1.0, 1.12).toDouble();
     final stickyPanelBottomOffset = media.padding.bottom + 10 * scale;
     final pinnedFooterHeight = 150 * scale + stickyPanelBottomOffset;
+    final topInset = widget.sheetMode
+        ? 16 * scale
+        : media.padding.top + 6 * scale;
     final items = ref.watch(dhikrItemsProvider);
+
+    if (widget.sheetMode) {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          systemNavigationBarColor: _pageBackground,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+        child: MediaQuery(
+          data: media.copyWith(textScaler: TextScaler.linear(textScale)),
+          child: Material(
+            color: _pageBackground,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(_detailTopBackgroundAsset),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                ),
+              ),
+              child: items.when(
+                data: (dhikrs) {
+                  final item = dhikrs.firstWhere(
+                    (dhikr) => dhikr.id == widget.dhikrId,
+                    orElse: () => dhikrs.first,
+                  );
+                  final detail = _DhikrDetailContent.forItem(item);
+                  if (_selectedTarget != 0 &&
+                      _selectedTarget != _customTarget &&
+                      !_fixedTargetOptions.contains(_selectedTarget)) {
+                    _selectedTarget = _fixedTargetOptions.first;
+                  }
+
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      14 * scale,
+                      58 * scale,
+                      14 * scale,
+                      media.padding.bottom + 12 * scale,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: contentWidth,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _HeroPanel(
+                              scale: scale,
+                              item: item,
+                              detail: detail,
+                            ),
+                            SizedBox(height: 7 * scale),
+                            _InfoCard(
+                              scale: scale,
+                              title: 'Anlamı',
+                              body: detail.longMeaning,
+                            ),
+                            SizedBox(height: 8 * scale),
+                            _StickyActionPanel(
+                              scale: scale,
+                              selectedTarget: _selectedTarget,
+                              customTarget: _customTarget,
+                              onTargetChanged: _selectTarget,
+                              onCustomTarget: _showCustomTargetDialog,
+                              target: _selectedTarget,
+                              onPressed: () => _startDhikr(item),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                error: (error, stackTrace) => _LoadState(
+                  scale: scale,
+                  title: 'Zikir açılamadı',
+                  message: '$error',
+                ),
+                loading: () => _LoadState(
+                  scale: scale,
+                  title: 'Zikir hazırlanıyor',
+                  message: 'Detaylar birazdan açılacak.',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -104,19 +208,22 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
                               physics: const BouncingScrollPhysics(),
                               padding: EdgeInsets.fromLTRB(
                                 14 * scale,
-                                media.padding.top + 6 * scale,
+                                topInset,
                                 14 * scale,
                                 pinnedFooterHeight,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  _TopBar(scale: scale, item: item),
-                                  SizedBox(height: 7 * scale),
+                                  if (!widget.sheetMode) ...[
+                                    _TopBar(scale: scale, item: item),
+                                    SizedBox(height: 7 * scale),
+                                  ],
                                   _HeroPanel(
                                     scale: scale,
                                     item: item,
                                     detail: detail,
+                                    compactTop: true,
                                   ),
                                   SizedBox(height: 7 * scale),
                                   _InfoCard(
@@ -124,10 +231,6 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
                                     title: 'Anlamı',
                                     body: detail.longMeaning,
                                   ),
-                                  SizedBox(height: 6 * scale),
-                                  _VirtueCard(scale: scale, detail: detail),
-                                  SizedBox(height: 6 * scale),
-                                  _TimingCard(scale: scale, detail: detail),
                                 ],
                               ),
                             ),
@@ -169,11 +272,19 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
     );
   }
 
-  void _startDhikr(DhikrItem item) {
+  Future<void> _startDhikr(DhikrItem item) async {
     ref
         .read(counterControllerProvider.notifier)
         .startDhikr(item, target: _selectedTarget);
     ref.read(interactionFeedbackServiceProvider).primaryAction();
+    if (widget.sheetMode) {
+      final router = GoRouter.of(context);
+      Navigator.of(context).pop();
+      await Future<void>.delayed(_sheetDismissToCounterDelay);
+      router.push(AppRoutes.counter);
+      return;
+    }
+
     context.push(AppRoutes.counter);
   }
 
@@ -333,40 +444,60 @@ class _HeroPanel extends StatelessWidget {
     required this.scale,
     required this.item,
     required this.detail,
+    this.compactTop = false,
   });
 
   final double scale;
   final DhikrItem item;
   final _DhikrDetailContent detail;
+  final bool compactTop;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
         8 * scale,
-        12 * scale,
+        (compactTop ? 0 : 12) * scale,
         8 * scale,
         12 * scale,
       ),
       child: Column(
         children: [
-          Text(
-            detail.arabic,
-            textAlign: TextAlign.center,
-            textDirection: TextDirection.rtl,
-            style: TextStyle(
-              color: _arabicHeroGreen,
-              fontFamily: 'Amiri',
-              fontSize: 34 * scale,
-              fontWeight: FontWeight.w700,
-              height: 1.18,
-              shadows: [
-                Shadow(
-                  color: _arabicHeroGreen.withValues(alpha: 0.20),
-                  blurRadius: 4 * scale,
-                  offset: Offset(0, 1.5 * scale),
-                ),
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _transliterationGold,
+                _transliterationGoldHighlight,
+                _transliterationGoldShadow,
               ],
+              stops: [0, 0.45, 1],
+            ).createShader(bounds),
+            child: Text(
+              detail.arabic,
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(
+                color: _transliterationGold,
+                fontFamily: 'Amiri',
+                fontSize: 34 * scale,
+                fontWeight: FontWeight.w700,
+                height: 1.18,
+                shadows: [
+                  Shadow(
+                    color: _deepGreen.withValues(alpha: 0.36),
+                    blurRadius: 2.5 * scale,
+                    offset: Offset(0, 1.1 * scale),
+                  ),
+                  Shadow(
+                    color: _transliterationGoldShadow.withValues(alpha: 0.22),
+                    blurRadius: 7 * scale,
+                    offset: Offset(0, 2.2 * scale),
+                  ),
+                ],
+              ),
             ),
           ),
           SizedBox(height: 5 * scale),
@@ -374,17 +505,17 @@ class _HeroPanel extends StatelessWidget {
             detail.transliteration,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _transliterationGold,
+              color: _arabicHeroGreen,
               fontFamily: 'EB Garamond',
-              fontSize: 24 * scale,
+              fontSize: 27 * scale,
               fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               height: 1.1,
               shadows: [
                 Shadow(
-                  color: _deepGreen.withValues(alpha: 0.12),
-                  blurRadius: 3 * scale,
-                  offset: Offset(0, 1 * scale),
+                  color: _arabicHeroGreen.withValues(alpha: 0.20),
+                  blurRadius: 4 * scale,
+                  offset: Offset(0, 1.5 * scale),
                 ),
               ],
             ),
@@ -471,9 +602,9 @@ class _InfoCard extends StatelessWidget {
         constraints: BoxConstraints(minHeight: 118 * scale),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final doorReserve = (constraints.maxWidth * 0.18).clamp(
+            final doorReserve = (constraints.maxWidth * 0.12).clamp(
+              36 * scale,
               48 * scale,
-              66 * scale,
             );
 
             return Padding(
@@ -481,13 +612,17 @@ class _InfoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(scale: scale, title: title),
+                  _SectionTitle(
+                    scale: scale,
+                    title: title,
+                    fontSizeFactor: 12.4,
+                  ),
                   SizedBox(height: 7 * scale),
                   Text(
                     body,
                     style: TextStyle(
                       color: const Color(0xFF293934),
-                      fontSize: 11.15 * scale,
+                      fontSize: 12.4 * scale,
                       fontWeight: FontWeight.w500,
                       height: 1.45,
                     ),
@@ -497,160 +632,6 @@ class _InfoCard extends StatelessWidget {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _VirtueCard extends StatelessWidget {
-  const _VirtueCard({required this.scale, required this.detail});
-
-  final double scale;
-  final _DhikrDetailContent detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ReferenceCard(
-      scale: scale,
-      ornateBorder: true,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: 6 * scale,
-          vertical: 1 * scale,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SectionTitle(scale: scale, title: 'Fazileti'),
-            SizedBox(height: 11 * scale),
-            Text(
-              detail.virtueArabic,
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
-              style: TextStyle(
-                color: _primaryGreen,
-                fontFamily: 'Amiri',
-                fontSize: 15.2 * scale,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            SizedBox(height: 9 * scale),
-            Text(
-              detail.virtueText,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: const Color(0xFF34413A),
-                fontFamily: 'EB Garamond',
-                fontSize: 12.6 * scale,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w500,
-                height: 1.34,
-              ),
-            ),
-            SizedBox(height: 10 * scale),
-            Text(
-              detail.source,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _goldText,
-                fontSize: 10 * scale,
-                fontWeight: FontWeight.w800,
-                height: 1.1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TimingCard extends StatelessWidget {
-  const _TimingCard({required this.scale, required this.detail});
-
-  final double scale;
-  final _DhikrDetailContent detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ReferenceCard(
-      scale: scale,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(scale: scale, title: 'Ne zaman çekilir'),
-          SizedBox(height: 8 * scale),
-          Row(
-            children: [
-              for (final timing in detail.timings) ...[
-                Expanded(
-                  child: _TimingTile(scale: scale, timing: timing),
-                ),
-                if (timing != detail.timings.last) SizedBox(width: 5 * scale),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimingTile extends StatelessWidget {
-  const _TimingTile({required this.scale, required this.timing});
-
-  final double scale;
-  final _TimingInfo timing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minHeight: 55 * scale),
-      padding: EdgeInsets.symmetric(horizontal: 4 * scale, vertical: 6 * scale),
-      decoration: BoxDecoration(
-        color: _referenceSurfaceTop.withValues(alpha: 0.76),
-        borderRadius: BorderRadius.circular(11 * scale),
-        border: Border.all(color: _referenceBorder.withValues(alpha: 0.26)),
-        boxShadow: [
-          BoxShadow(
-            color: _deepGreen.withValues(alpha: 0.045),
-            blurRadius: 10 * scale,
-            offset: Offset(0, 4 * scale),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(timing.icon, color: _primaryGreen, size: 13 * scale),
-          SizedBox(height: 3 * scale),
-          Text(
-            timing.label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _primaryGreen,
-              fontSize: 9.5 * scale,
-              fontWeight: FontWeight.w800,
-              height: 1.08,
-            ),
-          ),
-          SizedBox(height: 2 * scale),
-          Text(
-            timing.amount,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _mutedGreen,
-              fontSize: 8.8 * scale,
-              fontWeight: FontWeight.w600,
-              height: 1.1,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -690,7 +671,11 @@ class _TargetCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SectionTitle(scale: scale, title: 'Hedef belirle'),
+          _SectionTitle(
+            scale: scale,
+            title: 'Hedef belirle',
+            fontSizeFactor: 12.4,
+          ),
           SizedBox(height: 8 * scale),
           Row(
             children: [
@@ -1097,7 +1082,6 @@ class _ReferenceCard extends StatelessWidget {
     this.backgroundAlignment = Alignment.centerRight,
     this.backgroundOverflowBottom = 0,
     this.backgroundOverflowRight = 0,
-    this.ornateBorder = false,
     this.emphasizedBorder = false,
     this.borderOpacity = 0.28,
     this.borderWidth,
@@ -1113,7 +1097,6 @@ class _ReferenceCard extends StatelessWidget {
   final Alignment backgroundAlignment;
   final double backgroundOverflowBottom;
   final double backgroundOverflowRight;
-  final bool ornateBorder;
   final bool emphasizedBorder;
   final double borderOpacity;
   final double? borderWidth;
@@ -1179,10 +1162,6 @@ class _ReferenceCard extends StatelessWidget {
                     painter: _EmphasizedCardBorderPainter(scale),
                   ),
                 ),
-              if (ornateBorder)
-                Positioned.fill(
-                  child: CustomPaint(painter: _OrnateGoldBorderPainter(scale)),
-                ),
             ],
           ),
         ),
@@ -1192,10 +1171,15 @@ class _ReferenceCard extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.scale, required this.title});
+  const _SectionTitle({
+    required this.scale,
+    required this.title,
+    this.fontSizeFactor = 11.2,
+  });
 
   final double scale;
   final String title;
+  final double fontSizeFactor;
 
   @override
   Widget build(BuildContext context) {
@@ -1225,7 +1209,7 @@ class _SectionTitle extends StatelessWidget {
           title.toUpperCase(),
           style: TextStyle(
             color: _primaryGreen,
-            fontSize: 10 * scale,
+            fontSize: fontSizeFactor * scale,
             fontWeight: FontWeight.w800,
             height: 1,
             letterSpacing: 0.3,
@@ -1328,80 +1312,6 @@ class _EmphasizedCardBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EmphasizedCardBorderPainter oldDelegate) =>
-      oldDelegate.scale != scale;
-}
-
-class _OrnateGoldBorderPainter extends CustomPainter {
-  const _OrnateGoldBorderPainter(this.scale);
-
-  final double scale;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(
-      7 * scale,
-      7 * scale,
-      size.width - 14 * scale,
-      size.height - 14 * scale,
-    );
-    final radius = Radius.circular(13 * scale);
-    final borderPaint = Paint()
-      ..color = _goldText.withValues(alpha: 0.26)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.75 * scale;
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), borderPaint);
-
-    final motifPaint = Paint()
-      ..color = _goldText.withValues(alpha: 0.42)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9 * scale
-      ..strokeCap = StrokeCap.round;
-
-    void drawCorner(Offset origin, double sx, double sy) {
-      final p = Path()
-        ..moveTo(origin.dx, origin.dy + sy * 9 * scale)
-        ..quadraticBezierTo(
-          origin.dx + sx * 5 * scale,
-          origin.dy + sy * 5 * scale,
-          origin.dx + sx * 10 * scale,
-          origin.dy,
-        )
-        ..moveTo(origin.dx + sx * 3 * scale, origin.dy + sy * 13 * scale)
-        ..lineTo(origin.dx + sx * 13 * scale, origin.dy + sy * 3 * scale);
-      canvas.drawPath(p, motifPaint);
-      canvas.drawCircle(
-        Offset(origin.dx + sx * 10 * scale, origin.dy + sy * 10 * scale),
-        1.2 * scale,
-        motifPaint,
-      );
-    }
-
-    drawCorner(Offset(12 * scale, 12 * scale), 1, 1);
-    drawCorner(Offset(size.width - 12 * scale, 12 * scale), -1, 1);
-    drawCorner(Offset(12 * scale, size.height - 12 * scale), 1, -1);
-    drawCorner(
-      Offset(size.width - 12 * scale, size.height - 12 * scale),
-      -1,
-      -1,
-    );
-
-    final dividerPaint = Paint()
-      ..color = _goldText.withValues(alpha: 0.16)
-      ..strokeWidth = 0.75 * scale;
-    canvas.drawLine(
-      Offset(size.width * 0.10, 8 * scale),
-      Offset(size.width * 0.90, 8 * scale),
-      dividerPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.10, size.height - 8 * scale),
-      Offset(size.width * 0.90, size.height - 8 * scale),
-      dividerPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _OrnateGoldBorderPainter oldDelegate) =>
       oldDelegate.scale != scale;
 }
 
@@ -1531,20 +1441,12 @@ class _DhikrDetailContent {
     required this.transliteration,
     required this.shortMeaning,
     required this.longMeaning,
-    required this.virtueArabic,
-    required this.virtueText,
-    required this.source,
-    required this.timings,
   });
 
   final String arabic;
   final String transliteration;
   final String shortMeaning;
   final String longMeaning;
-  final String virtueArabic;
-  final String virtueText;
-  final String source;
-  final List<_TimingInfo> timings;
 
   factory _DhikrDetailContent.forItem(DhikrItem item) {
     if (item.id == 'subhanallah') {
@@ -1554,28 +1456,6 @@ class _DhikrDetailContent {
         shortMeaning: 'Allah’ı her türlü noksanlıktan tenzih ederim.',
         longMeaning:
             'Kalbin Rabbine duyduğu hayretin ilk sözüdür. Mümin, kainatın her zerresinde O’nun kudretini görür ve “Rabbim her türlü eksiklikten münezzehtir” der. Dile hafif, mizanda ağır olan bu kelime, gönüldeki tevhid nuruna tercüman olur.',
-        virtueArabic:
-            'مَنْ قَالَ سُبْحَانَ اللَّهِ وَبِحَمْدِهِ فِي يَوْمٍ مِائَةَ مَرَّةٍ حُطَّتْ خَطَايَاهُ',
-        virtueText:
-            'Kim günde yüz defa “Sübhânallâhi ve bi-hamdihî” derse, günahları deniz köpüğü kadar bile olsa bağışlanır.',
-        source: 'Buhârî, Daavât 65 · Müslim, Zikir 28',
-        timings: [
-          _TimingInfo(
-            icon: Icons.wb_sunny_rounded,
-            label: 'Sabah-akşam',
-            amount: '100 defa',
-          ),
-          _TimingInfo(
-            icon: Icons.trip_origin_rounded,
-            label: 'Namaz sonrası',
-            amount: '33 defa',
-          ),
-          _TimingInfo(
-            icon: Icons.nights_stay_rounded,
-            label: 'Yatmadan',
-            amount: '33 defa',
-          ),
-        ],
       );
     }
 
@@ -1584,38 +1464,6 @@ class _DhikrDetailContent {
       transliteration: item.name,
       shortMeaning: item.meaning ?? '',
       longMeaning: item.meaning ?? 'Bu zikir için detay metni hazırlanıyor.',
-      virtueArabic: item.arabicText ?? '',
-      virtueText: 'Bu zikir için fazilet bilgileri hazırlanıyor.',
-      source: 'Kaynak bilgisi eklenecek',
-      timings: [
-        _TimingInfo(
-          icon: Icons.trip_origin_rounded,
-          label: 'Önerilen',
-          amount: '${item.defaultTarget} defa',
-        ),
-        const _TimingInfo(
-          icon: Icons.schedule_rounded,
-          label: 'Gün içinde',
-          amount: 'Uygun vakit',
-        ),
-        const _TimingInfo(
-          icon: Icons.flag_rounded,
-          label: 'Hedefli',
-          amount: 'Niyetle',
-        ),
-      ],
     );
   }
-}
-
-class _TimingInfo {
-  const _TimingInfo({
-    required this.icon,
-    required this.label,
-    required this.amount,
-  });
-
-  final IconData icon;
-  final String label;
-  final String amount;
 }

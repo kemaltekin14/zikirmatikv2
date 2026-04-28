@@ -79,6 +79,10 @@ flutter:
     - assets/images/zikir-hero.webp
     - assets/images/dhikr_detail_top_background.png
     - assets/images/zikir-arka2.webp
+    - assets/images/zikir-arka3.webp
+    - assets/images/zikr_counter_bg.webp
+    - assets/images/zikr_counter_ring.png
+    - assets/images/zikr_tesbih.png
     - assets/images/tablo-arka.webp
     - assets/images/today_esma_card_background.png
     - assets/images/hand_tasbih_icon.svg

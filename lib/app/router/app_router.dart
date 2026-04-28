@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/counter/presentation/counter_screen.dart';
+import '../../features/counter/presentation/zikr_counter_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/dhikr_library/presentation/dhikr_detail_screen.dart';
 import '../../features/dhikr_library/presentation/dhikr_library_screen.dart';
@@ -15,6 +15,7 @@ import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/statistics/presentation/statistics_screen.dart';
 import '../../features/vird/presentation/vird_screen.dart';
 import '../../shared/widgets/app_scaffold.dart';
+import '../../shared/widgets/ios_edge_back_gesture.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -39,8 +40,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sayac',
         name: AppRouteNames.counter,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const CounterScreen()),
+        pageBuilder: (context, state) => _counterPage(state),
       ),
       GoRoute(
         path: '/zikirler',
@@ -55,6 +55,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           context,
           state,
           DhikrDetailScreen(dhikrId: state.pathParameters['dhikrId'] ?? ''),
+          addIosEdgeBackGesture: true,
         ),
       ),
       GoRoute(
@@ -78,20 +79,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/hatirlaticilar',
         name: AppRouteNames.reminders,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const RemindersScreen()),
+        pageBuilder: (context, state) => _platformPage(
+          context,
+          state,
+          const RemindersScreen(),
+          addIosEdgeBackGesture: true,
+        ),
       ),
       GoRoute(
         path: '/istatistikler',
         name: AppRouteNames.statistics,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const StatisticsScreen()),
+        pageBuilder: (context, state) => _platformPage(
+          context,
+          state,
+          const StatisticsScreen(),
+          addIosEdgeBackGesture: true,
+        ),
       ),
       GoRoute(
         path: '/ayarlar',
         name: AppRouteNames.settings,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const SettingsScreen()),
+        pageBuilder: (context, state) => _platformPage(
+          context,
+          state,
+          const SettingsScreen(),
+          addIosEdgeBackGesture: true,
+        ),
       ),
     ],
     errorBuilder: (context, state) => AppScaffold(
@@ -107,74 +120,51 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
+Page<void> _counterPage(GoRouterState state) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 480),
+    reverseTransitionDuration: const Duration(milliseconds: 360),
+    child: const IosEdgeBackGesture(
+      enableOnAllPlatforms: true,
+      child: ZikrCounterScreen(),
+    ),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 1),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
+      );
+    },
+  );
+}
+
 Page<void> _platformPage(
   BuildContext context,
   GoRouterState state,
-  Widget child,
-) {
+  Widget child, {
+  bool addIosEdgeBackGesture = false,
+}) {
   final platform = Theme.of(context).platform;
   final isCupertinoPlatform =
       platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
 
   if (!isCupertinoPlatform) {
-    return MaterialPage<void>(
-      key: state.pageKey,
-      child: _EdgeSwipeBackPage(child: child),
-    );
+    return MaterialPage<void>(key: state.pageKey, child: child);
   }
 
   return CupertinoPage<void>(
     key: state.pageKey,
-    child: _EdgeSwipeBackPage(child: child),
+    child: addIosEdgeBackGesture ? IosEdgeBackGesture(child: child) : child,
   );
-}
-
-class _EdgeSwipeBackPage extends StatefulWidget {
-  const _EdgeSwipeBackPage({required this.child});
-
-  final Widget child;
-
-  @override
-  State<_EdgeSwipeBackPage> createState() => _EdgeSwipeBackPageState();
-}
-
-class _EdgeSwipeBackPageState extends State<_EdgeSwipeBackPage> {
-  static const _edgeWidth = 52.0;
-  static const _popDistance = 72.0;
-  static const _popVelocity = 520.0;
-
-  double _dragDistance = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        widget.child,
-        Positioned(
-          top: 0,
-          bottom: 0,
-          left: 0,
-          width: _edgeWidth,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onHorizontalDragStart: (_) => _dragDistance = 0,
-            onHorizontalDragUpdate: (details) {
-              _dragDistance += details.primaryDelta ?? 0;
-            },
-            onHorizontalDragEnd: (details) {
-              final velocity = details.primaryVelocity ?? 0;
-              final shouldPop =
-                  _dragDistance > _popDistance || velocity > _popVelocity;
-              if (shouldPop && context.canPop()) {
-                context.pop();
-              }
-              _dragDistance = 0;
-            },
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class AppRouteNames {

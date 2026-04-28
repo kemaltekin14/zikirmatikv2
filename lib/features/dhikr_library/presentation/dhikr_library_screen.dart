@@ -1,17 +1,17 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../app/router/app_router.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../../shared/layout/proportional_layout.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../settings/application/settings_controller.dart';
 import '../application/dhikr_providers.dart';
 import '../domain/dhikr_item.dart';
+import 'dhikr_detail_screen.dart';
 
 const _pageBackground = Color(0xFFE9EEE4);
 const _libraryHeroEdgeCream = Color(0xFFF6F3EE);
@@ -31,6 +31,7 @@ const _scrollExtraBottomSpacing = 42.0;
 const _dhikrLibraryHeroAsset = 'assets/images/zikir-hero.webp';
 const _allCategory = 'Tümü';
 const _favoriteCategory = 'Favoriler';
+const _detailSheetTransitionDuration = Duration(milliseconds: 420);
 
 double _bottomNavBottomOffset(double safeBottom, double scale) {
   final visualSafeInset = math.min(safeBottom, _bottomNavMaxSafeInset * scale);
@@ -228,9 +229,95 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
     );
   }
 
-  void _openDhikrDetail(DhikrItem item) {
+  Future<void> _openDhikrDetail(DhikrItem item) async {
     ref.read(interactionFeedbackServiceProvider).selection();
-    context.push(AppRoutes.dhikrDetail(item.id));
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Zikir detayını kapat',
+      barrierColor: Colors.transparent,
+      transitionDuration: _detailSheetTransitionDuration,
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return const SizedBox.shrink();
+      },
+      transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+        final media = MediaQuery.of(dialogContext);
+        final scale = proportionalLayoutScaleFor(media.size.width);
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(dialogContext).pop(),
+                  child: FadeTransition(
+                    opacity: curved,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.24),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: media.size.height * 0.92,
+                      ),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(28 * scale),
+                          ),
+                          border: Border.all(
+                            color: _gold.withValues(alpha: 0.55),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              blurRadius: 1 * scale,
+                              offset: Offset(0, -0.5 * scale),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(27 * scale),
+                          ),
+                          child: DhikrDetailScreen(
+                            dhikrId: item.id,
+                            sheetMode: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showAddDhikrSheet(double scale) async {
@@ -1190,7 +1277,7 @@ class _DhikrLibraryCard extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _primaryText,
-                            fontSize: 13.7 * scale,
+                            fontSize: 14.3 * scale,
                             fontWeight: FontWeight.w800,
                             height: 1.08,
                             letterSpacing: 0,
@@ -1206,7 +1293,7 @@ class _DhikrLibraryCard extends ConsumerWidget {
                               color: _secondaryText,
                               fontSize: 10.2 * scale,
                               fontWeight: FontWeight.w500,
-                              height: 1.2,
+                              height: 1.22,
                             ),
                           ),
                         ],
@@ -1364,23 +1451,23 @@ class _SmallTag extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _primaryGreen.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12 * scale),
+        borderRadius: BorderRadius.circular(12.5 * scale),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: 6.5 * scale,
-          vertical: 4 * scale,
+          horizontal: 7 * scale,
+          vertical: 4.2 * scale,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: _mutedGreen, size: 10.5 * scale),
+            Icon(icon, color: _mutedGreen, size: 11 * scale),
             SizedBox(width: 3.5 * scale),
             Text(
               label,
               style: TextStyle(
                 color: _primaryText,
-                fontSize: 8.8 * scale,
+                fontSize: 9.2 * scale,
                 fontWeight: FontWeight.w700,
                 height: 1,
               ),

@@ -2380,19 +2380,34 @@ class _QuickStartNavButtonState extends State<_QuickStartNavButton>
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
                                     colors: [
+                                      const Color(0xFF4DA071),
                                       const Color(0xFF3B8A61),
                                       _primaryGreen,
+                                      const Color(0xFF0D3525),
                                     ],
+                                    stops: const [0.0, 0.38, 0.72, 1.0],
                                   ),
                                 ),
-                                child: _QuickStartButtonFace(
-                                  scale: scale,
-                                  label: label,
-                                  progress: _introController.value,
-                                  lockedToIcon: _hasUsedQuickStart,
+                                child: ClipOval(
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Positioned.fill(
+                                        child: _QuickStartGlassDome(
+                                          scale: scale,
+                                        ),
+                                      ),
+                                      _QuickStartButtonFace(
+                                        scale: scale,
+                                        label: label,
+                                        progress: _introController.value,
+                                        lockedToIcon: _hasUsedQuickStart,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -2407,6 +2422,80 @@ class _QuickStartNavButtonState extends State<_QuickStartNavButton>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _QuickStartGlassDome extends StatelessWidget {
+  const _QuickStartGlassDome({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned(
+          left: -3 * scale,
+          right: -3 * scale,
+          top: -4 * scale,
+          height: 27 * scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.vertical(
+                bottom: Radius.circular(34 * scale),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0.34),
+                  Colors.white.withValues(alpha: 0.12),
+                  Colors.white.withValues(alpha: 0.00),
+                ],
+                stops: const [0.0, 0.58, 1.0],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 10 * scale,
+          top: 7 * scale,
+          width: 19 * scale,
+          height: 6 * scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.42),
+                  Colors.white.withValues(alpha: 0.08),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 4 * scale,
+          right: 4 * scale,
+          bottom: 1 * scale,
+          height: 22 * scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.13),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
