@@ -4,13 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../application/counter_controller.dart';
+import '../../../core/services/interaction_feedback_service.dart';
+import '../../dhikr_library/presentation/dhikr_library_screen.dart';
+import '../../settings/application/settings_controller.dart';
 import '../../../shared/layout/proportional_layout.dart';
 
 const _backgroundAsset = 'assets/images/zikr_counter_bg.webp';
 const _counterRingAsset = 'assets/images/zikr_counter_ring.png';
 const _tesbihAsset = 'assets/images/zikr_tesbih.png';
+const _completionCardAsset = 'assets/images/kartbitti.png';
 
 const _pageBackground = Color(0xFFE9EEE4);
 const _primaryGreen = Color(0xFF123B2B);
@@ -74,8 +79,6 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
   late final AnimationController _sonarController;
   late int _selectedTarget;
   var _tesbihModeEnabled = true;
-  var _vibrationEnabled = true;
-  var _muted = false;
   Offset? _sonarCenter;
   var _sonarRingRadius = 0.0;
 
@@ -98,6 +101,7 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
   @override
   Widget build(BuildContext context) {
     final counter = ref.watch(counterControllerProvider);
+    final settings = ref.watch(settingsControllerProvider);
     final media = MediaQuery.of(context);
     final scale = _counterScaleFor(media.size.width);
     final contentWidth = math.min(media.size.width, _contentMaxWidth * scale);
@@ -140,9 +144,28 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
               SafeArea(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final layoutHeight = math.min(
+                    final baseLayoutHeight = math.min(
                       constraints.maxHeight,
                       _maxLayoutHeight * scale,
+                    );
+                    final extraHeight = math.max(
+                      0.0,
+                      constraints.maxHeight - baseLayoutHeight,
+                    );
+                    final wideScreenFactor =
+                        ((scale - 1.0) / (_maxScreenScale - 1.0))
+                            .clamp(0.0, 1.0)
+                            .toDouble();
+                    final tallScreenFactor =
+                        ((extraHeight - 32 * scale) / (72 * scale))
+                            .clamp(0.0, 1.0)
+                            .toDouble();
+                    final spaciousLayoutFactor =
+                        wideScreenFactor * tallScreenFactor;
+                    final layoutHeight = math.min(
+                      constraints.maxHeight,
+                      baseLayoutHeight +
+                          extraHeight * 0.78 * spaciousLayoutFactor,
                     );
                     final compactScale =
                         (layoutHeight / (_maxLayoutHeight * scale))
@@ -160,6 +183,16 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                       required double min,
                       required double max,
                     }) => (value * scale).clamp(min, max).toDouble();
+                    final titleVisualLift =
+                        (y(_titleVisualLift, min: 15, max: 22) -
+                                24 * spaciousLayoutFactor)
+                            .clamp(0.0, 22.0)
+                            .toDouble();
+                    final targetPillRowLift =
+                        (y(_targetPillRowLift, min: 10, max: 16) -
+                                18 * spaciousLayoutFactor)
+                            .clamp(0.0, 16.0)
+                            .toDouble();
 
                     return Align(
                       alignment: Alignment.topCenter,
@@ -192,21 +225,18 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                   max: 130,
                                 ),
                                 child: Transform.translate(
-                                  offset: Offset(
-                                    0,
-                                    -y(_titleVisualLift, min: 15, max: 22),
+                                  offset: Offset(0, -titleVisualLift),
+                                  child: _TappableZikrTitle(
+                                    onTap: _openDhikrLibrary,
+                                    child: _ZikrTitleSection(scale: scale),
                                   ),
-                                  child: _ZikrTitleSection(scale: scale),
                                 ),
                               ),
                               SizedBox(
                                 height: y(_targetTopGap, min: 1, max: 4),
                               ),
                               Transform.translate(
-                                offset: Offset(
-                                  0,
-                                  -y(_targetPillRowLift, min: 10, max: 16),
-                                ),
+                                offset: Offset(0, -targetPillRowLift),
                                 child: _TargetCountPills(
                                   scale: scale,
                                   height: y(
@@ -216,7 +246,7 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                   ),
                                   selectedTarget: _selectedTarget,
                                   onTargetChanged: _selectTarget,
-                                  onCustomTarget: _showCustomTargetPlaceholder,
+                                  onCustomTarget: _showCustomTargetPicker,
                                 ),
                               ),
                               SizedBox(
@@ -299,13 +329,13 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                   max: 88,
                                 ),
                                 tesbihModeEnabled: _tesbihModeEnabled,
-                                vibrationEnabled: _vibrationEnabled,
-                                muted: _muted,
+                                vibrationEnabled: settings.vibrationEnabled,
+                                soundEnabled: settings.soundEnabled,
                                 onReset: _resetCounter,
                                 onUndo: _decrementCounter,
                                 onToggleTesbihMode: _toggleTesbihMode,
                                 onToggleVibration: _toggleVibration,
-                                onToggleMute: _toggleMute,
+                                onToggleSound: _toggleSound,
                               ),
                               SizedBox(height: y(_bottomInset, min: 4, max: 7)),
                             ],
@@ -316,6 +346,17 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                   },
                 ),
               ),
+              if (counter.completed)
+                _CompletionAssetOverlay(
+                  scale: scale,
+                  count: counter.count,
+                  target: counter.target,
+                  dhikrName: counter.activeDhikr.name,
+                  onDismiss: ref
+                      .read(counterControllerProvider.notifier)
+                      .dismissCompletion,
+                  onReset: _resetCounter,
+                ),
             ],
           ),
         ),
@@ -328,7 +369,42 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
     ref.read(counterControllerProvider.notifier).setTarget(target);
   }
 
-  void _showCustomTargetPlaceholder() {}
+  Future<void> _showCustomTargetPicker() async {
+    final currentTarget = ref.read(counterControllerProvider).target;
+    final value = await showModalBottomSheet<int>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      builder: (sheetContext) {
+        final media = MediaQuery.of(sheetContext);
+        final sheetScale = _counterScaleFor(media.size.width);
+        return _CustomTargetSheet(
+          scale: sheetScale,
+          initialValue:
+              currentTarget > 0 && !{33, 99, 100}.contains(currentTarget)
+              ? currentTarget
+              : null,
+        );
+      },
+    );
+    if (!mounted || value == null) return;
+    _selectTarget(value);
+  }
+
+  void _openDhikrLibrary() {
+    ref.read(interactionFeedbackServiceProvider).selection();
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      router.push('/zikirler');
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => const DhikrLibraryScreen()),
+    );
+  }
 
   void _incrementCounter() {
     ref.read(counterControllerProvider.notifier).increment();
@@ -355,11 +431,11 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
   }
 
   void _toggleVibration() {
-    setState(() => _vibrationEnabled = !_vibrationEnabled);
+    ref.read(settingsControllerProvider.notifier).toggleVibration();
   }
 
-  void _toggleMute() {
-    setState(() => _muted = !_muted);
+  void _toggleSound() {
+    ref.read(settingsControllerProvider.notifier).toggleSound();
   }
 
   double? _progressFor(int count, int target) {
@@ -414,6 +490,31 @@ class _TopNavigationArea extends StatelessWidget {
             onPressed: () {},
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TappableZikrTitle extends StatelessWidget {
+  const _TappableZikrTitle({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Zikir sayfasını aç',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          splashColor: _gold.withValues(alpha: 0.08),
+          highlightColor: _gold.withValues(alpha: 0.04),
+          child: child,
+        ),
       ),
     );
   }
@@ -792,6 +893,268 @@ class _TargetCountPills extends StatelessWidget {
   }
 }
 
+class _CustomTargetSheet extends StatefulWidget {
+  const _CustomTargetSheet({required this.scale, this.initialValue});
+
+  final double scale;
+  final int? initialValue;
+
+  @override
+  State<_CustomTargetSheet> createState() => _CustomTargetSheetState();
+}
+
+class _CustomTargetSheetState extends State<_CustomTargetSheet> {
+  late String _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initialValue?.toString() ?? '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = widget.scale;
+    final media = MediaQuery.of(context);
+    final canSubmit = _parsedValue != null;
+    final sheetWidth = math.min(media.size.width - 32 * scale, 360 * scale);
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(16 * scale, 0, 16 * scale, 10 * scale),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: sheetWidth,
+              padding: EdgeInsets.fromLTRB(
+                18 * scale,
+                10 * scale,
+                18 * scale,
+                16 * scale,
+              ),
+              decoration: BoxDecoration(
+                color: _referencePanelSurface.withValues(alpha: 0.98),
+                borderRadius: BorderRadius.circular(22 * scale),
+                border: Border.all(
+                  color: _mutedGold.withValues(alpha: 0.34),
+                  width: scale,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.16),
+                    blurRadius: 28 * scale,
+                    offset: Offset(0, 14 * scale),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40 * scale,
+                    height: 4 * scale,
+                    decoration: BoxDecoration(
+                      color: _mutedGold.withValues(alpha: 0.36),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  SizedBox(height: 13 * scale),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Özel hedef',
+                          style: TextStyle(
+                            color: _primaryGreen,
+                            fontSize: (17 * scale).clamp(16, 19).toDouble(),
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Kapat',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        color: _primaryGreen,
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8 * scale),
+                  Container(
+                    height: (52 * scale).clamp(48, 58).toDouble(),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _cream.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(14 * scale),
+                      border: Border.all(
+                        color: _mutedGold.withValues(alpha: 0.28),
+                      ),
+                    ),
+                    child: Text(
+                      _value.isEmpty ? 'Hedef sayısı' : _value,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _value.isEmpty
+                            ? _primaryGreen.withValues(alpha: 0.44)
+                            : _primaryGreen,
+                        fontSize: _value.isEmpty
+                            ? (14 * scale).clamp(13, 15.5).toDouble()
+                            : (24 * scale).clamp(22, 28).toDouble(),
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 12 * scale),
+                  GridView.count(
+                    crossAxisCount: 3,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 8 * scale,
+                    crossAxisSpacing: 8 * scale,
+                    childAspectRatio: 2.12,
+                    children: [
+                      for (final digit in const [
+                        '1',
+                        '2',
+                        '3',
+                        '4',
+                        '5',
+                        '6',
+                        '7',
+                        '8',
+                        '9',
+                      ])
+                        _NumpadButton(
+                          scale: scale,
+                          label: digit,
+                          onPressed: () => _appendDigit(digit),
+                        ),
+                      _NumpadButton(
+                        scale: scale,
+                        icon: Icons.backspace_outlined,
+                        onPressed: _value.isEmpty ? null : _backspace,
+                      ),
+                      _NumpadButton(
+                        scale: scale,
+                        label: '0',
+                        onPressed: () => _appendDigit('0'),
+                      ),
+                      _NumpadButton(
+                        scale: scale,
+                        icon: Icons.check_rounded,
+                        filled: true,
+                        onPressed: canSubmit ? _submit : null,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  int? get _parsedValue {
+    final value = int.tryParse(_value);
+    if (value == null || value < 1) return null;
+    return value;
+  }
+
+  void _appendDigit(String digit) {
+    if (_value.length >= 5) return;
+    setState(() {
+      if (_value == '0') {
+        _value = digit;
+      } else {
+        _value += digit;
+      }
+    });
+  }
+
+  void _backspace() {
+    if (_value.isEmpty) return;
+    setState(() => _value = _value.substring(0, _value.length - 1));
+  }
+
+  void _submit() {
+    final value = _parsedValue;
+    if (value == null) return;
+    Navigator.of(context).pop(value);
+  }
+}
+
+class _NumpadButton extends StatelessWidget {
+  const _NumpadButton({
+    required this.scale,
+    this.label,
+    this.icon,
+    this.filled = false,
+    this.onPressed,
+  });
+
+  final double scale;
+  final String? label;
+  final IconData? icon;
+  final bool filled;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    final foreground = filled
+        ? const Color(0xFFF2DE9B)
+        : _primaryGreen.withValues(alpha: enabled ? 1 : 0.35);
+    final surface = filled
+        ? _primaryGreen.withValues(alpha: enabled ? 0.96 : 0.38)
+        : _cream.withValues(alpha: enabled ? 0.96 : 0.56);
+
+    return Material(
+      color: surface,
+      borderRadius: BorderRadius.circular(13 * scale),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        splashColor: _gold.withValues(alpha: 0.14),
+        highlightColor: _gold.withValues(alpha: 0.08),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(13 * scale),
+            border: Border.all(
+              color: filled
+                  ? _gold.withValues(alpha: 0.60)
+                  : _mutedGold.withValues(alpha: enabled ? 0.32 : 0.16),
+            ),
+          ),
+          child: Center(
+            child: icon == null
+                ? Text(
+                    label ?? '',
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: (19 * scale).clamp(18, 22).toDouble(),
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    color: foreground,
+                    size: (21 * scale).clamp(20, 24).toDouble(),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CentralCounterArea extends StatelessWidget {
   const _CentralCounterArea({
     required this.scale,
@@ -837,10 +1200,10 @@ class _CentralCounterArea extends StatelessWidget {
             .clamp(9, 14)
             .toDouble();
         final counterSize = ringSize;
-        final tesbihHeight = (counterSize * 1.40).clamp(392, 520).toDouble();
+        final tesbihHeight = counterSize * 1.40;
         final tesbihWidth = tesbihHeight * 2 / 3;
-        final tesbihRight = (-counterSize * 0.04).clamp(-18, -12).toDouble();
-        final tesbihTop = (-counterSize * 0.055).clamp(-23, -14).toDouble();
+        final tesbihRight = -counterSize * 0.04;
+        final tesbihTop = -counterSize * 0.055;
         final interiorSize = (ringSize * 0.74).clamp(214, 286).toDouble();
         final counterNumberWidth = (ringSize * 0.48).clamp(154, 212).toDouble();
         final targetPillWidth = (ringSize * 0.27).clamp(92, 108).toDouble();
@@ -1331,6 +1694,496 @@ class _CounterSonarPainter extends CustomPainter {
   }
 }
 
+class _CompletionAssetOverlay extends StatelessWidget {
+  const _CompletionAssetOverlay({
+    required this.scale,
+    required this.count,
+    required this.target,
+    required this.dhikrName,
+    required this.onDismiss,
+    required this.onReset,
+  });
+
+  final double scale;
+  final int count;
+  final int target;
+  final String dhikrName;
+  final VoidCallback onDismiss;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final cardWidth = math.min(media.size.width * 0.80, 360 * scale);
+    final cardHeight = cardWidth * 540 / 360;
+    final titleSize = (32 * scale).clamp(29, 35).toDouble();
+    final subtitleSize = (15.8 * scale).clamp(14.5, 17.8).toDouble();
+    final bodySize = (11.8 * scale).clamp(11.0, 13.2).toDouble();
+
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.18),
+        child: SafeArea(
+          child: Center(
+            child: Transform.translate(
+              offset: Offset(0, -media.size.height * 0.055),
+              child: SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    Positioned.fill(
+                      child: Image.asset(
+                        _completionCardAsset,
+                        fit: BoxFit.fill,
+                      ),
+                    ),
+                    Positioned(
+                      top: cardHeight * 0.214,
+                      left: cardWidth * 0.085,
+                      right: cardWidth * 0.085,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _PremiumShimmerText(
+                            'Maşâallah!',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _titleGold,
+                              fontFamily: 'EB Garamond',
+                              fontSize: titleSize,
+                              fontStyle: FontStyle.italic,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                              shadows: [
+                                Shadow(
+                                  color: _mutedGold.withValues(alpha: 0.22),
+                                  blurRadius: 4.4 * scale,
+                                  offset: Offset(0, 1.2 * scale),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: cardHeight * 0.030),
+                          Text(
+                            'HEDEFİNE ULAŞTIN',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _primaryGreen,
+                              fontSize: subtitleSize,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0,
+                              height: 1,
+                            ),
+                          ),
+                          SizedBox(height: cardHeight * 0.026),
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: '$target defa '),
+                                TextSpan(
+                                  text: '"$dhikrName"',
+                                  style: TextStyle(
+                                    color: _titleGold,
+                                    fontWeight: FontWeight.w800,
+                                    shadows: [
+                                      Shadow(
+                                        color: _mutedGold.withValues(
+                                          alpha: 0.18,
+                                        ),
+                                        blurRadius: 3 * scale,
+                                        offset: Offset(0, 0.8 * scale),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const TextSpan(
+                                  text:
+                                      ' zikrini tamamladın.\n'
+                                      'Allah kabul etsin, kalbine huzur,\n'
+                                      'gönlüne ferahlık versin.',
+                                ),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _primaryGreen.withValues(alpha: 0.90),
+                              fontSize: bodySize,
+                              fontWeight: FontWeight.w500,
+                              height: 1.38,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      left: cardWidth * 0.18,
+                      right: cardWidth * 0.18,
+                      bottom: cardHeight * 0.205,
+                      child: _CompletionPraiseButton(
+                        scale: scale,
+                        onPressed: onDismiss,
+                      ),
+                    ),
+                    Positioned(
+                      left: cardWidth * 0.26,
+                      right: cardWidth * 0.26,
+                      bottom: cardHeight * 0.126,
+                      child: _CompletionResetButton(
+                        scale: scale,
+                        onPressed: onReset,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletionPraiseButton extends StatelessWidget {
+  const _CompletionPraiseButton({required this.scale, required this.onPressed});
+
+  final double scale;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: (43 * scale).clamp(41, 48).toDouble(),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: _deepGreen.withValues(alpha: 0.18),
+              blurRadius: 12 * scale,
+              offset: Offset(0, 5 * scale),
+            ),
+          ],
+        ),
+        child: Material(
+          color: const Color(0xFF0D4A34),
+          borderRadius: BorderRadius.circular(999),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            splashColor: _gold.withValues(alpha: 0.16),
+            highlightColor: _gold.withValues(alpha: 0.08),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: _gold.withValues(alpha: 0.78),
+                  width: 1.2 * scale,
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 17 * scale),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Elhamdülillah',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: const Color(0xFFF2DE9B),
+                          fontSize: (14 * scale).clamp(13, 15.8).toDouble(),
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 13 * scale),
+                    Icon(
+                      Icons.favorite_border_rounded,
+                      color: const Color(0xFFF2DE9B),
+                      size: (19 * scale).clamp(18, 21).toDouble(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletionResetButton extends StatelessWidget {
+  const _CompletionResetButton({required this.scale, required this.onPressed});
+
+  final double scale;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: (34 * scale).clamp(32, 38).toDouble(),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: _mutedGold.withValues(alpha: 0.10),
+              blurRadius: 8 * scale,
+              offset: Offset(0, 3 * scale),
+            ),
+          ],
+        ),
+        child: Material(
+          color: _cream.withValues(alpha: 0.80),
+          borderRadius: BorderRadius.circular(999),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            splashColor: _gold.withValues(alpha: 0.12),
+            highlightColor: _gold.withValues(alpha: 0.07),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: _mutedGold.withValues(alpha: 0.58),
+                  width: 1.05 * scale,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  'TEKRAR BAŞLA',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _primaryGreen,
+                    fontSize: (11.8 * scale).clamp(11.2, 13.2).toDouble(),
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ignore: unused_element
+class _CompletionOverlay extends StatelessWidget {
+  const _CompletionOverlay({
+    required this.scale,
+    required this.count,
+    required this.target,
+    required this.onDismiss,
+    required this.onReset,
+  });
+
+  final double scale;
+  final int count;
+  final int target;
+  final VoidCallback onDismiss;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.18),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 30 * scale),
+              child: Container(
+                width: math.min(328 * scale, 340),
+                padding: EdgeInsets.fromLTRB(
+                  22 * scale,
+                  22 * scale,
+                  22 * scale,
+                  18 * scale,
+                ),
+                decoration: BoxDecoration(
+                  color: _referencePanelSurface.withValues(alpha: 0.98),
+                  borderRadius: BorderRadius.circular(22 * scale),
+                  border: Border.all(
+                    color: _gold.withValues(alpha: 0.48),
+                    width: scale,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.20),
+                      blurRadius: 30 * scale,
+                      offset: Offset(0, 14 * scale),
+                    ),
+                    BoxShadow(
+                      color: _gold.withValues(alpha: 0.16),
+                      blurRadius: 22 * scale,
+                      offset: Offset.zero,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 54 * scale,
+                      height: 54 * scale,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _primaryGreen,
+                        border: Border.all(
+                          color: _gold.withValues(alpha: 0.74),
+                          width: 1.2 * scale,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.check_rounded,
+                        color: const Color(0xFFF2DE9B),
+                        size: 31 * scale,
+                      ),
+                    ),
+                    SizedBox(height: 14 * scale),
+                    Text(
+                      'Tebrikler',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _primaryGreen,
+                        fontSize: (22 * scale).clamp(21, 25).toDouble(),
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                    SizedBox(height: 8 * scale),
+                    Text(
+                      'Hedef tamamlandı',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _primaryGreen.withValues(alpha: 0.76),
+                        fontSize: (13.4 * scale).clamp(12.5, 15).toDouble(),
+                        fontWeight: FontWeight.w700,
+                        height: 1.16,
+                      ),
+                    ),
+                    SizedBox(height: 13 * scale),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 17 * scale,
+                        vertical: 9 * scale,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _cream.withValues(alpha: 0.88),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: _mutedGold.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Text(
+                        '$count / $target',
+                        style: TextStyle(
+                          color: _primaryGreen,
+                          fontSize: (15 * scale).clamp(14, 17).toDouble(),
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 17 * scale),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _CompletionActionButton(
+                            scale: scale,
+                            label: 'Kapat',
+                            onPressed: onDismiss,
+                          ),
+                        ),
+                        SizedBox(width: 10 * scale),
+                        Expanded(
+                          child: _CompletionActionButton(
+                            scale: scale,
+                            label: 'Sıfırla',
+                            filled: true,
+                            onPressed: onReset,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletionActionButton extends StatelessWidget {
+  const _CompletionActionButton({
+    required this.scale,
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+  });
+
+  final double scale;
+  final String label;
+  final VoidCallback onPressed;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: (40 * scale).clamp(38, 44).toDouble(),
+      child: filled
+          ? FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: _primaryGreen,
+                foregroundColor: const Color(0xFFF2DE9B),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: onPressed,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: (12.5 * scale).clamp(12, 14).toDouble(),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            )
+          : OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primaryGreen,
+                side: BorderSide(color: _mutedGold.withValues(alpha: 0.42)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: onPressed,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: (12.5 * scale).clamp(12, 14).toDouble(),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
 class _ProgressCard extends StatelessWidget {
   const _ProgressCard({
     required this.scale,
@@ -1385,7 +2238,7 @@ class _ProgressCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Flexible(
+              Expanded(
                 child: Text(
                   'TOPLAM İLERLEMEN',
                   maxLines: 1,
@@ -1780,24 +2633,24 @@ class _BottomControlBar extends StatelessWidget {
     required this.height,
     required this.tesbihModeEnabled,
     required this.vibrationEnabled,
-    required this.muted,
+    required this.soundEnabled,
     required this.onReset,
     required this.onUndo,
     required this.onToggleTesbihMode,
     required this.onToggleVibration,
-    required this.onToggleMute,
+    required this.onToggleSound,
   });
 
   final double scale;
   final double height;
   final bool tesbihModeEnabled;
   final bool vibrationEnabled;
-  final bool muted;
+  final bool soundEnabled;
   final VoidCallback onReset;
   final VoidCallback onUndo;
   final VoidCallback onToggleTesbihMode;
   final VoidCallback onToggleVibration;
-  final VoidCallback onToggleMute;
+  final VoidCallback onToggleSound;
 
   @override
   Widget build(BuildContext context) {
@@ -1860,14 +2713,18 @@ class _BottomControlBar extends StatelessWidget {
                     icon: Icons.vibration_rounded,
                     label: 'TİTREŞİM',
                     selected: vibrationEnabled,
+                    showStatusDot: true,
                     onPressed: onToggleVibration,
                   ),
                   _ControlButton(
                     scale: scale,
-                    icon: Icons.volume_off_rounded,
-                    label: 'SESSİZ',
-                    selected: muted,
-                    onPressed: onToggleMute,
+                    icon: soundEnabled
+                        ? Icons.volume_up_rounded
+                        : Icons.volume_off_rounded,
+                    label: 'SES',
+                    selected: soundEnabled,
+                    showStatusDot: true,
+                    onPressed: onToggleSound,
                   ),
                 ],
               ),
@@ -2044,6 +2901,7 @@ class _ControlButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.selected = false,
+    this.showStatusDot = false,
   });
 
   final double scale;
@@ -2051,6 +2909,7 @@ class _ControlButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
   final bool selected;
+  final bool showStatusDot;
 
   @override
   Widget build(BuildContext context) {
@@ -2058,6 +2917,27 @@ class _ControlButton extends StatelessWidget {
     final buttonSize = (38 * scale).clamp(34, 42).toDouble();
     final iconSize = (20 * scale).clamp(18, 22).toDouble();
     final labelSize = (8.8 * scale).clamp(8, 9.6).toDouble();
+    final inactiveToggle = showStatusDot && !selected;
+    final activeToggle = showStatusDot && selected;
+    final buttonSurface = selected
+        ? activeToggle
+              ? _cream.withValues(alpha: 0.90)
+              : _primaryGreen.withValues(alpha: 0.96)
+        : _cream.withValues(alpha: inactiveToggle ? 0.58 : 0.90);
+    final iconColor = selected
+        ? activeToggle
+              ? _primaryGreen.withValues(alpha: 0.86)
+              : const Color(0xFFF0D78B)
+        : _primaryGreen.withValues(alpha: inactiveToggle ? 0.44 : 0.86);
+    final borderColor = selected
+        ? activeToggle
+              ? _mutedGold.withValues(alpha: 0.20)
+              : _gold.withValues(alpha: 0.72)
+        : _mutedGold.withValues(alpha: inactiveToggle ? 0.14 : 0.20);
+    final labelColor = selected
+        ? _primaryGreen
+        : _primaryGreen.withValues(alpha: inactiveToggle ? 0.50 : 0.76);
+    final dotSize = (5.2 * scale).clamp(4.6, 5.8).toDouble();
 
     return SizedBox(
       width: itemWidth,
@@ -2071,30 +2951,84 @@ class _ControlButton extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: _deepGreen.withValues(alpha: 0.08),
-                  blurRadius: 10 * scale,
-                  offset: Offset(0, 4 * scale),
+                  color: _deepGreen.withValues(alpha: selected ? 0.18 : 0.08),
+                  blurRadius: (selected ? 13 : 10) * scale,
+                  offset: Offset(0, (selected ? 5 : 4) * scale),
+                ),
+                if (selected)
+                  BoxShadow(
+                    color: _gold.withValues(alpha: 0.18),
+                    blurRadius: 9 * scale,
+                    offset: Offset.zero,
+                  ),
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: selected ? 0.16 : 0.30),
+                  blurRadius: 2 * scale,
+                  offset: Offset(0, -0.5 * scale),
                 ),
               ],
             ),
-            child: Material(
-              color: _cream.withValues(alpha: selected ? 0.98 : 0.90),
-              shape: CircleBorder(
-                side: BorderSide(
-                  color: (selected ? _gold : _mutedGold).withValues(
-                    alpha: selected ? 0.40 : 0.20,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: Material(
+                    color: buttonSurface,
+                    shape: CircleBorder(
+                      side: BorderSide(
+                        color: borderColor,
+                        width: (selected ? 1.05 : 0.8) * scale,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: onPressed,
+                      splashColor: _gold.withValues(alpha: 0.12),
+                      highlightColor: _gold.withValues(alpha: 0.08),
+                      child: Icon(icon, color: iconColor, size: iconSize),
+                    ),
                   ),
-                  width: 0.8 * scale,
                 ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onPressed,
-                splashColor: _gold.withValues(alpha: 0.12),
-                highlightColor: _gold.withValues(alpha: 0.08),
-                child: Icon(icon, color: _primaryGreen, size: iconSize),
-              ),
+                if (showStatusDot)
+                  Positioned(
+                    top: (4.8 * scale).clamp(4.2, 5.6).toDouble(),
+                    right: (7.1 * scale).clamp(6.3, 7.8).toDouble(),
+                    child: IgnorePointer(
+                      child: Container(
+                        width: dotSize,
+                        height: dotSize,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: selected
+                              ? const Color(0xFFF5D76E)
+                              : _mutedGold.withValues(alpha: 0.24),
+                          border: Border.all(
+                            color: selected
+                                ? _cream.withValues(alpha: 0.72)
+                                : _cream.withValues(alpha: 0.28),
+                            width: 0.65 * scale,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: selected
+                                  ? _gold.withValues(alpha: 0.64)
+                                  : _deepGreen.withValues(alpha: 0.04),
+                              blurRadius: (selected ? 5.5 : 1.8) * scale,
+                              offset: Offset.zero,
+                            ),
+                            if (selected)
+                              BoxShadow(
+                                color: Colors.white.withValues(alpha: 0.36),
+                                blurRadius: 2.2 * scale,
+                                offset: Offset(0, -0.3 * scale),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           SizedBox(height: (3 * scale).clamp(2, 4).toDouble()),
@@ -2104,7 +3038,7 @@ class _ControlButton extends StatelessWidget {
               label,
               maxLines: 1,
               style: TextStyle(
-                color: _primaryGreen,
+                color: labelColor,
                 fontSize: labelSize,
                 fontWeight: FontWeight.w800,
                 height: 1,

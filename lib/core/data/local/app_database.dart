@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 part 'app_database.g.dart';
 
 const _uuid = Uuid();
+DateTime? _lastCounterEventCreatedAt;
 
 class DhikrRecords extends Table {
   TextColumn get id => text()();
@@ -145,7 +146,7 @@ class AppDatabase extends _$AppDatabase {
     required int target,
     required String eventType,
   }) {
-    final now = DateTime.now();
+    final now = _nextCounterEventTimestamp();
     return into(counterEvents).insert(
       CounterEventsCompanion.insert(
         id: _uuid.v4(),
@@ -164,7 +165,10 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<CounterEvent>> watchCounterEvents() {
     return (select(counterEvents)
           ..where((table) => table.deletedAt.isNull())
-          ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]))
+          ..orderBy([
+            (table) => OrderingTerm.desc(table.createdAt),
+            (table) => OrderingTerm.desc(table.countAfter),
+          ]))
         .watch();
   }
 
@@ -246,4 +250,14 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+}
+
+DateTime _nextCounterEventTimestamp() {
+  final now = DateTime.now();
+  final previous = _lastCounterEventCreatedAt;
+  final timestamp = previous != null && !now.isAfter(previous)
+      ? previous.add(const Duration(milliseconds: 1))
+      : now;
+  _lastCounterEventCreatedAt = timestamp;
+  return timestamp;
 }

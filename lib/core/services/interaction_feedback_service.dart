@@ -25,7 +25,6 @@ class InteractionFeedbackService {
         amplitude: 135,
         fallback: HapticFeedback.mediumImpact,
       ),
-      sound: SystemSoundType.click,
     );
   }
 
@@ -36,17 +35,17 @@ class InteractionFeedbackService {
         amplitude: 175,
         fallback: HapticFeedback.heavyImpact,
       ),
-      sound: SystemSoundType.click,
+      sound: _nativeSuccessSound,
     );
   }
 
-  void _run({Future<void> Function()? haptic, SystemSoundType? sound}) {
+  void _run({Future<void> Function()? haptic, Future<void> Function()? sound}) {
     final settings = _readSettings();
     if (settings.vibrationEnabled && haptic != null) {
       unawaited(_guard(haptic));
     }
     if (settings.soundEnabled && sound != null) {
-      unawaited(_guard(() => SystemSound.play(sound)));
+      unawaited(_guard(sound));
     }
   }
 
@@ -73,6 +72,10 @@ class InteractionFeedbackService {
     } on PlatformException {
       await fallback();
     }
+  }
+
+  Future<void> _nativeSuccessSound() {
+    return _nativeFeedbackChannel.invokeMethod<void>('playSuccessSound');
   }
 }
 

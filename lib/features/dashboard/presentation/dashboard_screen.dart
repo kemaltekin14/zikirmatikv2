@@ -1504,11 +1504,17 @@ class _HistoryEntry {
 }
 
 List<_HistoryEntry> _historyEntriesFromEvents(List<CounterEvent> events) {
+  final orderedEvents = [...events]
+    ..sort((a, b) {
+      final dateComparison = b.createdAt.compareTo(a.createdAt);
+      if (dateComparison != 0) return dateComparison;
+      return b.countAfter.compareTo(a.countAfter);
+    });
   final currentOpenEntries = <String, _HistoryEntry>{};
   final currentStateResolved = <String>{};
   final completedEntries = <_HistoryEntry>[];
 
-  for (final event in events) {
+  for (final event in orderedEvents) {
     final completed =
         event.target > 0 &&
         (event.eventType == 'completed' || event.countAfter >= event.target);
