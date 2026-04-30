@@ -1320,7 +1320,7 @@ class _PressableCounterDial extends StatefulWidget {
 
 class _PressableCounterDialState extends State<_PressableCounterDial>
     with TickerProviderStateMixin {
-  static const _livePullBeadShiftSlots = 0.22;
+  static const _livePullBeadShiftSlots = 0.17;
 
   static const _pressSpring = SpringDescription(
     mass: 1,
@@ -1748,7 +1748,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     );
   }
 
-  double get _pullThreshold => (46 * widget.scale).clamp(40, 58).toDouble();
+  double get _pullThreshold => (62 * widget.scale).clamp(54, 74).toDouble();
 
   double get _pullFraction =>
       (_dragPullDistance / _pullThreshold).clamp(0.0, 1.0).toDouble();
@@ -1832,13 +1832,18 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   void _handlePanUpdate(DragUpdateDetails details) {
     if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
 
-    final diagonalPull = details.delta.dy - details.delta.dx * 0.18;
+    final diagonalPull = details.delta.dy - details.delta.dx * 0.12;
     final effectivePull = math.max(0.0, diagonalPull);
     if (effectivePull == 0 && _dragPullDistance == 0) return;
 
-    final nextDistance = (_dragPullDistance + effectivePull).clamp(
+    final currentFraction = _pullFraction;
+    final maxStep = (9.6 * widget.scale).clamp(7.8, 11.2).toDouble();
+    final resistedPull =
+        math.min(effectivePull, maxStep) *
+        (0.58 + (1 - currentFraction) * 0.20);
+    final nextDistance = (_dragPullDistance + resistedPull).clamp(
       0.0,
-      _pullThreshold * 1.24,
+      _pullThreshold * 1.12,
     );
     if (!_pullCompletedForGesture && nextDistance >= _pullThreshold) {
       final settleStart = _beadShiftEnd + _livePullBeadShiftSlots;
