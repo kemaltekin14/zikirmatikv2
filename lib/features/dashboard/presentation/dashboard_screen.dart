@@ -2090,15 +2090,13 @@ class HomeBottomNav extends ConsumerWidget {
     );
     final navRadius = BorderRadius.circular(32 * scale);
     final lastStartedDhikrId = ref.watch(lastStartedDhikrIdProvider);
-    final DhikrItem? quickStartDhikr;
-    if (lastStartedDhikrId == null) {
-      quickStartDhikr = null;
-    } else {
-      final dhikrs = ref
-          .watch(dhikrItemsProvider)
-          .maybeWhen(data: (items) => items, orElse: () => builtinDhikrs);
-      quickStartDhikr = _dhikrById(dhikrs, lastStartedDhikrId);
-    }
+    final dhikrs = ref
+        .watch(dhikrItemsProvider)
+        .maybeWhen(data: (items) => items, orElse: () => builtinDhikrs);
+    final quickStartDhikr =
+        _dhikrById(dhikrs, lastStartedDhikrId ?? 'subhanallah') ??
+        _dhikrById(builtinDhikrs, 'subhanallah') ??
+        builtinDhikrs.first;
     final feedback = ref.read(interactionFeedbackServiceProvider);
 
     void openRouteWithSelectionFeedback(String route) {
@@ -2117,11 +2115,6 @@ class HomeBottomNav extends ConsumerWidget {
     }
 
     void handleQuickStart() {
-      if (quickStartDhikr == null) {
-        context.push(AppRoutes.dhikrLibrary);
-        feedback.primaryAction();
-        return;
-      }
       ref.read(counterControllerProvider.notifier).startDhikr(quickStartDhikr);
       context.push(AppRoutes.counter);
       feedback.primaryAction();
@@ -2197,7 +2190,7 @@ class HomeBottomNav extends ConsumerWidget {
                       ),
                       _QuickStartNavButton(
                         scale: scale,
-                        hasDhikr: quickStartDhikr != null,
+                        hasDhikr: true,
                         buttonKey: quickStartKey,
                         onPressed: handleQuickStart,
                       ),

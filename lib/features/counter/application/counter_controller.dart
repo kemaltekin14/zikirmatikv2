@@ -89,7 +89,7 @@ class CounterController extends Notifier<CounterState> {
     if (completed) {
       feedback.success();
     } else {
-      feedback.selection();
+      feedback.counterTick();
     }
 
     unawaited(

@@ -28,6 +28,20 @@ class InteractionFeedbackService {
     );
   }
 
+  void counterTick() {
+    _run(
+      haptic: () => _nativeVibrate(
+        durationMs: 36,
+        amplitude: 205,
+        fallback: HapticFeedback.mediumImpact,
+      ),
+    );
+  }
+
+  void beadCollision() {
+    _run(sound: _nativeBeadCollisionSound);
+  }
+
   void success() {
     _run(
       haptic: () => _nativeVibrate(
@@ -76,6 +90,10 @@ class InteractionFeedbackService {
 
   Future<void> _nativeSuccessSound() {
     return _nativeFeedbackChannel.invokeMethod<void>('playSuccessSound');
+  }
+
+  Future<void> _nativeBeadCollisionSound() {
+    return _nativeFeedbackChannel.invokeMethod<void>('playBeadCollisionSound');
   }
 }
 

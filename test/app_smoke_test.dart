@@ -129,7 +129,14 @@ void main() {
     expect(find.byType(ZikrCounterScreen), findsOneWidget);
     expect(find.text('0'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('counter.increment')));
+    final counterFinder = find.byKey(const Key('counter.increment'));
+    final counterRect = tester.getRect(counterFinder);
+    final tesbihPullStart = Offset(
+      counterRect.left + counterRect.width * 0.62,
+      counterRect.top + counterRect.height * 0.50,
+    );
+
+    await tester.tap(counterFinder);
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('1'), findsOneWidget);
@@ -138,27 +145,41 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('0'), findsOneWidget);
+
+    await tester.tap(find.text('TESBİH\nMODU'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(counterFinder);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('0'), findsOneWidget);
+
+    await tester.dragFrom(tesbihPullStart, const Offset(0, 180));
+    await tester.pump(const Duration(milliseconds: 360));
+
+    expect(find.text('1'), findsOneWidget);
   });
 
-  testWidgets('quick start opens library before selection and counter after', (
-    tester,
-  ) async {
-    await pumpMobileApp(tester);
+  testWidgets(
+    'quick start opens default counter on fresh install and counter after',
+    (tester) async {
+      await pumpMobileApp(tester);
 
-    await tester.tap(find.byKey(const Key('home.quickStart')));
-    await pumpUntilFound(tester, find.byType(DhikrLibraryScreen));
+      await tester.tap(find.byKey(const Key('home.quickStart')));
+      await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
 
-    expect(find.byType(DhikrLibraryScreen), findsOneWidget);
+      expect(find.byType(ZikrCounterScreen), findsOneWidget);
 
-    await pumpMobileApp(
-      tester,
-      sharedPreferences: {'counter.lastStartedDhikrId': 'subhanallah'},
-    );
+      await pumpMobileApp(
+        tester,
+        sharedPreferences: {'counter.lastStartedDhikrId': 'subhanallah'},
+      );
 
-    await tester.tap(find.byKey(const Key('home.quickStart')));
-    await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
+      await tester.tap(find.byKey(const Key('home.quickStart')));
+      await pumpUntilFound(tester, find.byKey(const Key('counter.increment')));
 
-    expect(find.byType(ZikrCounterScreen), findsOneWidget);
-    expect(find.byKey(const Key('counter.increment')), findsOneWidget);
-  });
+      expect(find.byType(ZikrCounterScreen), findsOneWidget);
+      expect(find.byKey(const Key('counter.increment')), findsOneWidget);
+    },
+  );
 }

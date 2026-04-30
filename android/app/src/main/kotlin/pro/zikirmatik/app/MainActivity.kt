@@ -14,8 +14,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private var successSoundPool: SoundPool? = null
+    private var feedbackSoundPool: SoundPool? = null
     private var successSoundId: Int = 0
+    private var beadCollisionSoundId: Int = 0
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -23,7 +24,7 @@ class MainActivity : FlutterActivity() {
         window.decorView.post {
             disableSystemTouchSounds(window.decorView)
         }
-        prepareSuccessSound()
+        prepareFeedbackSounds()
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -40,15 +41,20 @@ class MainActivity : FlutterActivity() {
                     playSuccessSound()
                     result.success(null)
                 }
+                "playBeadCollisionSound" -> {
+                    playBeadCollisionSound()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        successSoundPool?.release()
-        successSoundPool = null
+        feedbackSoundPool?.release()
+        feedbackSoundPool = null
         successSoundId = 0
+        beadCollisionSoundId = 0
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
@@ -61,27 +67,29 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun prepareSuccessSound() {
-        if (successSoundPool != null) return
+    private fun prepareFeedbackSounds() {
+        if (feedbackSoundPool != null) return
 
-        val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        successSoundPool = SoundPool.Builder()
-            .setMaxStreams(1)
-            .setAudioAttributes(attributes)
+        feedbackSoundPool = SoundPool.Builder()
+            .setMaxStreams(3)
+            .setAudioAttributes(feedbackAudioAttributes())
             .build()
             .also { pool ->
                 successSoundId = pool.load(this, R.raw.success_chime, 1)
+                beadCollisionSoundId = pool.load(this, R.raw.glass_tesbih_click, 1)
             }
     }
 
     private fun playSuccessSound() {
-        val pool = successSoundPool ?: return
+        val pool = feedbackSoundPool ?: return
         if (successSoundId == 0) return
         pool.play(successSoundId, 0.58f, 0.58f, 1, 0, 1.0f)
+    }
+
+    private fun playBeadCollisionSound() {
+        val pool = feedbackSoundPool ?: return
+        if (beadCollisionSoundId == 0) return
+        pool.play(beadCollisionSoundId, 0.46f, 0.46f, 1, 0, 1.08f)
     }
 
     private fun vibrate(durationMs: Long, amplitude: Int) {
@@ -97,15 +105,21 @@ class MainActivity : FlutterActivity() {
 
         val duration = durationMs.coerceAtLeast(1L)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(
-                VibrationEffect.createOneShot(
-                    duration,
-                    amplitude.coerceIn(1, 255)
-                )
+            val effect = VibrationEffect.createOneShot(
+                duration,
+                amplitude.coerceIn(1, 255)
             )
+            vibrator.vibrate(effect, feedbackAudioAttributes())
         } else {
             @Suppress("DEPRECATION")
             vibrator.vibrate(duration)
         }
+    }
+
+    private fun feedbackAudioAttributes(): AudioAttributes {
+        return AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
     }
 }

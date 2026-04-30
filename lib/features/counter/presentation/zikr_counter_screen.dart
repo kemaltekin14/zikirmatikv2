@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
@@ -6,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'premium_tesbih_pull_layer.dart';
 import '../application/counter_controller.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../dhikr_library/presentation/dhikr_library_screen.dart';
@@ -78,7 +81,7 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _sonarController;
   late int _selectedTarget;
-  var _tesbihModeEnabled = true;
+  var _tesbihModeEnabled = false;
   Offset? _sonarCenter;
   var _sonarRingRadius = 0.0;
 
@@ -257,7 +260,9 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                   scale: scale,
                                   count: counter.count,
                                   selectedTarget: _selectedTarget,
+                                  tesbihModeEnabled: _tesbihModeEnabled,
                                   onIncrement: _incrementCounter,
+                                  onBeadCollision: _playBeadCollisionSound,
                                   onSonarStart: _startCounterSonar,
                                 ),
                               ),
@@ -284,7 +289,9 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                             .toDouble(),
                                       ),
                                       child: Text(
-                                        'D O K U N A R A K  S A Y',
+                                        _tesbihModeEnabled
+                                            ? 'T E S B İ H İ  A Ş A Ğ I  Ç E K'
+                                            : 'D O K U N A R A K  S A Y',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: _titleGold,
@@ -408,6 +415,10 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
 
   void _incrementCounter() {
     ref.read(counterControllerProvider.notifier).increment();
+  }
+
+  void _playBeadCollisionSound() {
+    ref.read(interactionFeedbackServiceProvider).beadCollision();
   }
 
   void _startCounterSonar(Offset center, double ringRadius) {
@@ -834,6 +845,10 @@ class _TargetCountPills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final customTargetSelected =
+        selectedTarget != _infiniteTarget &&
+        !{33, 99, 100}.contains(selectedTarget);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final gap = math.min(5 * scale, constraints.maxWidth * 0.014);
@@ -874,6 +889,7 @@ class _TargetCountPills extends StatelessWidget {
                   scale: scale,
                   icon: Icons.edit_rounded,
                   tooltip: 'Özel hedef',
+                  selected: customTargetSelected,
                   onPressed: onCustomTarget,
                 ),
                 SizedBox(width: gap),
@@ -1160,14 +1176,18 @@ class _CentralCounterArea extends StatelessWidget {
     required this.scale,
     required this.count,
     required this.selectedTarget,
+    required this.tesbihModeEnabled,
     required this.onIncrement,
+    required this.onBeadCollision,
     required this.onSonarStart,
   });
 
   final double scale;
   final int count;
   final int selectedTarget;
+  final bool tesbihModeEnabled;
   final VoidCallback onIncrement;
+  final VoidCallback onBeadCollision;
   final void Function(Offset center, double ringRadius) onSonarStart;
 
   @override
@@ -1221,6 +1241,7 @@ class _CentralCounterArea extends StatelessWidget {
               scale: scale,
               count: count,
               targetLabel: targetLabel,
+              tesbihModeEnabled: tesbihModeEnabled,
               areaWidth: constraints.maxWidth,
               areaHeight: constraints.maxHeight,
               counterSize: counterSize,
@@ -1236,6 +1257,7 @@ class _CentralCounterArea extends StatelessWidget {
               targetPillHeight: targetPillHeight,
               targetPillTop: targetPillTop,
               onIncrement: onIncrement,
+              onBeadCollision: onBeadCollision,
               onSonarStart: onSonarStart,
             ),
           ),
@@ -1250,6 +1272,7 @@ class _PressableCounterDial extends StatefulWidget {
     required this.scale,
     required this.count,
     required this.targetLabel,
+    required this.tesbihModeEnabled,
     required this.areaWidth,
     required this.areaHeight,
     required this.counterSize,
@@ -1265,12 +1288,14 @@ class _PressableCounterDial extends StatefulWidget {
     required this.targetPillHeight,
     required this.targetPillTop,
     required this.onIncrement,
+    required this.onBeadCollision,
     required this.onSonarStart,
   });
 
   final double scale;
   final int count;
   final String targetLabel;
+  final bool tesbihModeEnabled;
   final double areaWidth;
   final double areaHeight;
   final double counterSize;
@@ -1286,6 +1311,7 @@ class _PressableCounterDial extends StatefulWidget {
   final double targetPillHeight;
   final double targetPillTop;
   final VoidCallback onIncrement;
+  final VoidCallback onBeadCollision;
   final void Function(Offset center, double ringRadius) onSonarStart;
 
   @override
@@ -1294,6 +1320,8 @@ class _PressableCounterDial extends StatefulWidget {
 
 class _PressableCounterDialState extends State<_PressableCounterDial>
     with TickerProviderStateMixin {
+  static const _livePullBeadShiftSlots = 0.22;
+
   static const _pressSpring = SpringDescription(
     mass: 1,
     stiffness: 520,
@@ -1302,7 +1330,21 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
 
   late final AnimationController _pressController;
   late final AnimationController _countPopController;
+  late final AnimationController _beadSlideController;
+  late final AnimationController _tesbihModeController;
+  late final AnimationController _pullHintController;
   final _counterDialKey = GlobalKey();
+  var _beadShiftStart = 0.0;
+  var _beadShiftEnd = 0.0;
+  var _dragPullDistance = 0.0;
+  var _isDraggingTesbih = false;
+  var _pullCompletedForGesture = false;
+  var _pullHintIntroReady = false;
+  var _showPullHint = false;
+  var _pullHintCompletedPulls = 0;
+  Timer? _pullHintIntroTimer;
+  Timer? _pullHintTimer;
+  double? _pendingBeadSettleStart;
 
   @override
   void initState() {
@@ -1317,13 +1359,53 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       duration: const Duration(milliseconds: 190),
       value: 1,
     );
+    _beadShiftStart = widget.count.toDouble();
+    _beadShiftEnd = widget.count.toDouble();
+    _beadSlideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 310),
+      value: 1,
+    );
+    _tesbihModeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2050),
+      value: widget.tesbihModeEnabled ? 1 : 0,
+    );
+    _pullHintController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 820),
+    )..repeat(reverse: true);
   }
 
   @override
   void didUpdateWidget(covariant _PressableCounterDial oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.count != widget.count) {
+      _beadShiftStart = _pendingBeadSettleStart ?? oldWidget.count.toDouble();
+      _pendingBeadSettleStart = null;
+      _beadShiftEnd = widget.count.toDouble();
+      _beadSlideController.forward(from: 0);
       _countPopController.forward(from: 0);
+    }
+    if (oldWidget.tesbihModeEnabled != widget.tesbihModeEnabled) {
+      _dragPullDistance = 0;
+      _isDraggingTesbih = false;
+      _pullCompletedForGesture = false;
+      if (widget.tesbihModeEnabled) {
+        _resetPullHint();
+        _tesbihModeController.forward();
+        _pullHintIntroTimer = Timer(
+          const Duration(milliseconds: 1180),
+          _showPullHintAfterIntro,
+        );
+      } else {
+        _hidePullHint();
+        _tesbihModeController.animateBack(
+          0,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+      }
     }
   }
 
@@ -1331,6 +1413,11 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   void dispose() {
     _pressController.dispose();
     _countPopController.dispose();
+    _beadSlideController.dispose();
+    _tesbihModeController.dispose();
+    _pullHintIntroTimer?.cancel();
+    _pullHintTimer?.cancel();
+    _pullHintController.dispose();
     super.dispose();
   }
 
@@ -1341,8 +1428,12 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       behavior: HitTestBehavior.translucent,
       onTapDown: _handleTapDown,
       onTapUp: _handleTapUp,
-      onTapCancel: _releasePress,
+      onTapCancel: _handleTapCancel,
       onTap: _handleTap,
+      onPanStart: _handlePanStart,
+      onPanUpdate: _handlePanUpdate,
+      onPanEnd: _handlePanEnd,
+      onPanCancel: _handlePanCancel,
       child: SizedBox(
         width: widget.areaWidth,
         height: widget.areaHeight,
@@ -1405,9 +1496,48 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
                         width: widget.tesbihWidth,
                         height: widget.tesbihHeight,
                         child: IgnorePointer(
-                          child: Image.asset(_tesbihAsset, fit: BoxFit.contain),
+                          child: AnimatedBuilder(
+                            animation: _tesbihModeController,
+                            builder: (context, child) {
+                              return _StaticTesbihAssetReveal(
+                                fadeOutProgress: _tesbihModeController.value,
+                                tesbihModeEnabled: widget.tesbihModeEnabled,
+                                child: child!,
+                              );
+                            },
+                            child: Image.asset(
+                              _tesbihAsset,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                       ),
+                      if (widget.tesbihModeEnabled)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: AnimatedBuilder(
+                              animation: Listenable.merge([
+                                _beadSlideController,
+                                _tesbihModeController,
+                              ]),
+                              builder: (context, _) {
+                                final revealProgress = _tesbihModeController
+                                    .value
+                                    .clamp(0.0, 1.0)
+                                    .toDouble();
+                                return PremiumTesbihPullLayer(
+                                  scale: widget.scale,
+                                  beadShift: _currentBeadShift,
+                                  pullFraction: _pullFraction,
+                                  enabled: true,
+                                  revealProgress: revealProgress,
+                                  pass: PremiumTesbihPullLayerPass
+                                      .underRingSegments,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       SizedBox.square(
                         dimension: widget.ringSize,
                         child: Image.asset(
@@ -1415,6 +1545,32 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
                           fit: BoxFit.contain,
                         ),
                       ),
+                      if (widget.tesbihModeEnabled)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: AnimatedBuilder(
+                              animation: Listenable.merge([
+                                _beadSlideController,
+                                _tesbihModeController,
+                              ]),
+                              builder: (context, _) {
+                                final revealProgress = _tesbihModeController
+                                    .value
+                                    .clamp(0.0, 1.0)
+                                    .toDouble();
+                                return PremiumTesbihPullLayer(
+                                  scale: widget.scale,
+                                  beadShift: _currentBeadShift,
+                                  pullFraction: _pullFraction,
+                                  enabled: true,
+                                  revealProgress: revealProgress,
+                                  pass:
+                                      PremiumTesbihPullLayerPass.overRingStrand,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       AnimatedBuilder(
                         animation: _pressController,
                         builder: (context, child) {
@@ -1536,6 +1692,51 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
                           ),
                         ),
                       ),
+                      if (widget.tesbihModeEnabled)
+                        Positioned(
+                          right: (-widget.counterSize * 0.018)
+                              .clamp(-8.0, -5.0)
+                              .toDouble(),
+                          top: (widget.counterSize * 0.395)
+                              .clamp(114.0, 151.0)
+                              .toDouble(),
+                          child: IgnorePointer(
+                            child: AnimatedOpacity(
+                              opacity:
+                                  _pullHintIntroReady &&
+                                      _showPullHint &&
+                                      _pullHintCompletedPulls < 2
+                                  ? 1
+                                  : 0,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              child: AnimatedSlide(
+                                offset:
+                                    _pullHintIntroReady &&
+                                        _showPullHint &&
+                                        _pullHintCompletedPulls < 2
+                                    ? Offset.zero
+                                    : const Offset(0.08, 0.12),
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutCubic,
+                                child: AnimatedScale(
+                                  scale:
+                                      _pullHintIntroReady &&
+                                          _showPullHint &&
+                                          _pullHintCompletedPulls < 2
+                                      ? 1
+                                      : 0.92,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutBack,
+                                  child: _TesbihPullHintPill(
+                                    scale: widget.scale,
+                                    animation: _pullHintController,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1545,6 +1746,20 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
         ),
       ),
     );
+  }
+
+  double get _pullThreshold => (46 * widget.scale).clamp(40, 58).toDouble();
+
+  double get _pullFraction =>
+      (_dragPullDistance / _pullThreshold).clamp(0.0, 1.0).toDouble();
+
+  double get _currentBeadShift {
+    final slide = Curves.easeOutCubic.transform(
+      _beadSlideController.value.clamp(0.0, 1.0).toDouble(),
+    );
+    final animatedShift =
+        _beadShiftStart + (_beadShiftEnd - _beadShiftStart) * slide;
+    return animatedShift + _pullFraction * _livePullBeadShiftSlots;
   }
 
   _CounterPressState get _currentPressState {
@@ -1558,6 +1773,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   }
 
   void _handleTapDown(TapDownDetails details) {
+    if (widget.tesbihModeEnabled) return;
     _pressController.stop();
     _startSonarFromDialCenter();
     _pressController.animateTo(
@@ -1568,11 +1784,172 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   }
 
   void _handleTapUp(TapUpDetails details) {
+    if (widget.tesbihModeEnabled) return;
+    _releasePress();
+  }
+
+  void _handleTapCancel() {
+    if (widget.tesbihModeEnabled) return;
     _releasePress();
   }
 
   void _handleTap() {
+    if (widget.tesbihModeEnabled) return;
+    _playAcceptedTapPulse();
     widget.onIncrement();
+  }
+
+  void _playAcceptedTapPulse() {
+    _pressController.stop();
+    final visiblePress = math
+        .max(_pressController.value.clamp(0.0, 1.0).toDouble(), 0.72)
+        .toDouble();
+    _pressController
+        .animateTo(
+          visiblePress,
+          duration: const Duration(milliseconds: 48),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(() {
+          if (mounted && !widget.tesbihModeEnabled) {
+            _releasePress();
+          }
+        });
+  }
+
+  void _handlePanStart(DragStartDetails details) {
+    if (!widget.tesbihModeEnabled) return;
+    _isDraggingTesbih = _isTesbihPullStart(details.localPosition);
+    if (!_isDraggingTesbih) return;
+
+    _startSonarFromDialCenter();
+    setState(() {
+      _dragPullDistance = 0;
+      _pullCompletedForGesture = false;
+    });
+  }
+
+  void _handlePanUpdate(DragUpdateDetails details) {
+    if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
+
+    final diagonalPull = details.delta.dy - details.delta.dx * 0.18;
+    final effectivePull = math.max(0.0, diagonalPull);
+    if (effectivePull == 0 && _dragPullDistance == 0) return;
+
+    final nextDistance = (_dragPullDistance + effectivePull).clamp(
+      0.0,
+      _pullThreshold * 1.24,
+    );
+    if (!_pullCompletedForGesture && nextDistance >= _pullThreshold) {
+      final settleStart = _beadShiftEnd + _livePullBeadShiftSlots;
+      setState(() {
+        _dragPullDistance = 0;
+        _pullCompletedForGesture = true;
+      });
+      _performTesbihPullIncrement(settleStart: settleStart);
+      return;
+    }
+
+    setState(() => _dragPullDistance = nextDistance);
+  }
+
+  void _handlePanEnd(DragEndDetails details) {
+    if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
+    final shouldCompletePull =
+        !_pullCompletedForGesture && _pullFraction >= 0.58;
+    final settleStart = _beadShiftEnd + _pullFraction * _livePullBeadShiftSlots;
+    setState(() {
+      _dragPullDistance = 0;
+      _isDraggingTesbih = false;
+      _pullCompletedForGesture = false;
+    });
+    if (shouldCompletePull) {
+      _performTesbihPullIncrement(settleStart: settleStart);
+    }
+  }
+
+  void _handlePanCancel() {
+    if (_dragPullDistance == 0 && !_isDraggingTesbih) return;
+    setState(() {
+      _dragPullDistance = 0;
+      _isDraggingTesbih = false;
+      _pullCompletedForGesture = false;
+    });
+  }
+
+  void _performTesbihPullIncrement({required double settleStart}) {
+    _pendingBeadSettleStart = settleStart;
+    _registerPullHintProgress();
+    _startSonarFromDialCenter();
+    _pressController.stop();
+    _pressController
+        .animateTo(
+          0.52,
+          duration: const Duration(milliseconds: 64),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(() {
+          if (mounted) {
+            _releasePress();
+          }
+        });
+    widget.onBeadCollision();
+    widget.onIncrement();
+  }
+
+  void _resetPullHint() {
+    _pullHintIntroTimer?.cancel();
+    _pullHintTimer?.cancel();
+    setState(() {
+      _pullHintIntroReady = false;
+      _pullHintCompletedPulls = 0;
+      _showPullHint = false;
+    });
+  }
+
+  void _hidePullHint() {
+    _pullHintIntroTimer?.cancel();
+    _pullHintTimer?.cancel();
+    _pullHintIntroReady = false;
+    _pullHintCompletedPulls = 0;
+    _showPullHint = false;
+  }
+
+  void _showPullHintAfterIntro() {
+    if (!mounted || !widget.tesbihModeEnabled) return;
+    setState(() {
+      _pullHintIntroReady = true;
+      _showPullHint = _pullHintCompletedPulls < 2;
+    });
+  }
+
+  void _registerPullHintProgress() {
+    _pullHintTimer?.cancel();
+    final completedPulls = _pullHintCompletedPulls + 1;
+
+    setState(() {
+      _pullHintCompletedPulls = completedPulls;
+      _showPullHint = completedPulls < 2;
+    });
+
+    _pullHintTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted || !widget.tesbihModeEnabled) return;
+      setState(() {
+        _pullHintCompletedPulls = 0;
+        _showPullHint = _pullHintIntroReady;
+      });
+    });
+  }
+
+  bool _isTesbihPullStart(Offset localPosition) {
+    final dialLeft = (widget.areaWidth - widget.counterSize) / 2;
+    final dialTop =
+        (widget.areaHeight - widget.counterSize) / 2 - widget.counterVisualLift;
+    final dialPosition = localPosition - Offset(dialLeft, dialTop);
+    final x = dialPosition.dx / widget.counterSize;
+    final y = dialPosition.dy / widget.counterSize;
+
+    return x >= 0.42 && x <= 0.94 && y >= 0.30 && y <= 0.98;
   }
 
   void _releasePress() {
@@ -1599,6 +1976,139 @@ class _CounterPressState {
 
   final double easedPress;
   final double rebound;
+}
+
+class _TesbihPullHintPill extends StatelessWidget {
+  const _TesbihPullHintPill({required this.scale, required this.animation});
+
+  final double scale;
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = (28 * scale).clamp(25.0, 31.0).toDouble();
+    final iconSize = (16.5 * scale).clamp(14.0, 18.0).toDouble();
+    final fontSize = (11.4 * scale).clamp(10.2, 12.4).toDouble();
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final pulse = Curves.easeInOutCubic.transform(animation.value);
+        final chevronOffset = (pulse * 3.2 * scale).clamp(1.6, 3.8).toDouble();
+
+        return Transform.translate(
+          offset: Offset(0, pulse * 1.2),
+          child: Container(
+            height: height,
+            padding: EdgeInsetsDirectional.only(
+              start: 6 * scale,
+              end: 10 * scale,
+            ),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _cream.withValues(alpha: 0.92),
+                  _counterTargetPillSurface.withValues(alpha: 0.88),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: _gold.withValues(alpha: 0.62),
+                width: 1.1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _deepGreen.withValues(alpha: 0.12),
+                  blurRadius: 9 * scale,
+                  offset: Offset(0, 4 * scale),
+                ),
+                BoxShadow(
+                  color: _gold.withValues(alpha: 0.14 + pulse * 0.10),
+                  blurRadius: 13 * scale,
+                  spreadRadius: 0.3 * scale,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: iconSize + 1.5 * scale,
+                  height: height,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.translate(
+                        offset: Offset(0, chevronOffset - 2.0 * scale),
+                        child: Icon(
+                          Icons.keyboard_double_arrow_down_rounded,
+                          size: iconSize,
+                          color: _mutedGold.withValues(alpha: 0.90),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 4 * scale),
+                Text(
+                  'Tesbihi çek',
+                  style: TextStyle(
+                    color: _primaryGreen.withValues(alpha: 0.92),
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                    letterSpacing: 0,
+                    shadows: [
+                      Shadow(
+                        color: _cream.withValues(alpha: 0.65),
+                        blurRadius: 3 * scale,
+                        offset: Offset(0, 0.8 * scale),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StaticTesbihAssetReveal extends StatelessWidget {
+  const _StaticTesbihAssetReveal({
+    required this.fadeOutProgress,
+    required this.tesbihModeEnabled,
+    required this.child,
+  });
+
+  final double fadeOutProgress;
+  final bool tesbihModeEnabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final rawProgress = fadeOutProgress.clamp(0.0, 1.0).toDouble();
+    final visibleFraction = tesbihModeEnabled
+        ? (1 -
+                  Curves.easeOutCubic.transform(
+                    (rawProgress / 0.035).clamp(0.0, 1.0).toDouble(),
+                  ))
+              .clamp(0.0, 1.0)
+              .toDouble()
+        : (1 - Curves.easeOutCubic.transform(rawProgress))
+              .clamp(0.0, 1.0)
+              .toDouble();
+    if (visibleFraction <= 0.001) return const SizedBox.shrink();
+
+    return Opacity(
+      opacity: (visibleFraction * 1.08).clamp(0.0, 1.0).toDouble(),
+      child: child,
+    );
+  }
 }
 
 class _CounterSonarPainter extends CustomPainter {
@@ -1714,135 +2224,206 @@ class _CompletionAssetOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final systemTextScale = media.textScaler.scale(1);
+    final tightCompletionLayout =
+        systemTextScale > 1.01 || media.size.shortestSide < 380;
     final cardWidth = math.min(media.size.width * 0.80, 360 * scale);
     final cardHeight = cardWidth * 540 / 360;
-    final titleSize = (32 * scale).clamp(29, 35).toDouble();
-    final subtitleSize = (15.8 * scale).clamp(14.5, 17.8).toDouble();
-    final bodySize = (11.8 * scale).clamp(11.0, 13.2).toDouble();
+    final titleSize = ((tightCompletionLayout ? 30.5 : 32) * scale)
+        .clamp(
+          tightCompletionLayout ? 27.5 : 29,
+          tightCompletionLayout ? 32.5 : 35,
+        )
+        .toDouble();
+    final subtitleSize = ((tightCompletionLayout ? 13.4 : 15.8) * scale)
+        .clamp(
+          tightCompletionLayout ? 12.4 : 14.5,
+          tightCompletionLayout ? 14.8 : 17.8,
+        )
+        .toDouble();
+    final bodySize = ((tightCompletionLayout ? 10.6 : 11.8) * scale)
+        .clamp(
+          tightCompletionLayout ? 9.8 : 11.0,
+          tightCompletionLayout ? 11.8 : 13.2,
+        )
+        .toDouble();
+    final contentTopFactor = tightCompletionLayout ? 0.190 : 0.214;
+    final contentSideFactor = tightCompletionLayout ? 0.095 : 0.085;
+    final titleGapFactor = tightCompletionLayout ? 0.020 : 0.030;
+    final bodyGapFactor = tightCompletionLayout ? 0.016 : 0.026;
+    final bodyLineHeight = tightCompletionLayout ? 1.20 : 1.38;
+    final buttonSideFactor = tightCompletionLayout ? 0.22 : 0.26;
+    final praiseButtonBottomFactor = tightCompletionLayout ? 0.198 : 0.205;
+    final resetButtonBottomFactor = tightCompletionLayout ? 0.120 : 0.126;
+    const completionBodySuffix =
+        '\nzikrini tamamladın.\n'
+        'Allah kabul etsin, kalbine huzur,\n'
+        'gönlüne ferahlık versin.';
 
     return Positioned.fill(
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.18),
-        child: SafeArea(
-          child: Center(
-            child: Transform.translate(
-              offset: Offset(0, -media.size.height * 0.055),
-              child: SizedBox(
-                width: cardWidth,
-                height: cardHeight,
-                child: Stack(
-                  alignment: Alignment.topCenter,
-                  children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        _completionCardAsset,
-                        fit: BoxFit.fill,
-                      ),
-                    ),
-                    Positioned(
-                      top: cardHeight * 0.214,
-                      left: cardWidth * 0.085,
-                      right: cardWidth * 0.085,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _PremiumShimmerText(
-                            'Maşâallah!',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: _titleGold,
-                              fontFamily: 'EB Garamond',
-                              fontSize: titleSize,
-                              fontStyle: FontStyle.italic,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
-                              shadows: [
-                                Shadow(
-                                  color: _mutedGold.withValues(alpha: 0.22),
-                                  blurRadius: 4.4 * scale,
-                                  offset: Offset(0, 1.2 * scale),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: cardHeight * 0.030),
-                          Text(
-                            'HEDEFİNE ULAŞTIN',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: _primaryGreen,
-                              fontSize: subtitleSize,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0,
-                              height: 1,
-                            ),
-                          ),
-                          SizedBox(height: cardHeight * 0.026),
-                          Text.rich(
-                            TextSpan(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 460),
+        curve: Curves.easeOutCubic,
+        builder: (context, progress, _) {
+          final cardProgress = Curves.easeOutBack
+              .transform(progress)
+              .clamp(0.0, 1.08)
+              .toDouble();
+          final cardScale = 0.92 + cardProgress * 0.08;
+          final cardLift = (1 - progress) * 24 * scale;
+
+          return BackdropFilter(
+            filter: ui.ImageFilter.blur(
+              sigmaX: 7 * progress,
+              sigmaY: 7 * progress,
+            ),
+            child: MediaQuery(
+              data: media.copyWith(textScaler: TextScaler.noScaling),
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.24 * progress),
+                child: SafeArea(
+                  child: Center(
+                    child: Opacity(
+                      opacity: progress,
+                      child: Transform.translate(
+                        offset: Offset(
+                          0,
+                          -media.size.height * 0.055 + cardLift,
+                        ),
+                        child: Transform.scale(
+                          scale: cardScale,
+                          child: SizedBox(
+                            width: cardWidth,
+                            height: cardHeight,
+                            child: Stack(
+                              alignment: Alignment.topCenter,
                               children: [
-                                TextSpan(text: '$target defa '),
-                                TextSpan(
-                                  text: '"$dhikrName"',
-                                  style: TextStyle(
-                                    color: _titleGold,
-                                    fontWeight: FontWeight.w800,
-                                    shadows: [
-                                      Shadow(
-                                        color: _mutedGold.withValues(
-                                          alpha: 0.18,
+                                Positioned.fill(
+                                  child: Image.asset(
+                                    _completionCardAsset,
+                                    fit: BoxFit.fill,
+                                  ),
+                                ),
+                                Positioned(
+                                  top: cardHeight * contentTopFactor,
+                                  left: cardWidth * contentSideFactor,
+                                  right: cardWidth * contentSideFactor,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _PremiumShimmerText(
+                                        'Maşâallah!',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: _titleGold,
+                                          fontFamily: 'EB Garamond',
+                                          fontSize: titleSize,
+                                          fontStyle: FontStyle.italic,
+                                          fontWeight: FontWeight.w800,
+                                          height: 1,
+                                          shadows: [
+                                            Shadow(
+                                              color: _mutedGold.withValues(
+                                                alpha: 0.22,
+                                              ),
+                                              blurRadius: 4.4 * scale,
+                                              offset: Offset(0, 1.2 * scale),
+                                            ),
+                                          ],
                                         ),
-                                        blurRadius: 3 * scale,
-                                        offset: Offset(0, 0.8 * scale),
+                                      ),
+                                      SizedBox(
+                                        height: cardHeight * titleGapFactor,
+                                      ),
+                                      Text(
+                                        'HEDEFİNE ULAŞTIN',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: _primaryGreen,
+                                          fontSize: subtitleSize,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0,
+                                          height: 1,
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        height: cardHeight * bodyGapFactor,
+                                      ),
+                                      Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            TextSpan(text: '$target defa '),
+                                            TextSpan(
+                                              text: '"$dhikrName"',
+                                              style: TextStyle(
+                                                color: _titleGold,
+                                                fontWeight: FontWeight.w800,
+                                                shadows: [
+                                                  Shadow(
+                                                    color: _mutedGold
+                                                        .withValues(
+                                                          alpha: 0.18,
+                                                        ),
+                                                    blurRadius: 3 * scale,
+                                                    offset: Offset(
+                                                      0,
+                                                      0.8 * scale,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: completionBodySuffix,
+                                            ),
+                                          ],
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: _primaryGreen.withValues(
+                                            alpha: 0.90,
+                                          ),
+                                          fontSize: bodySize,
+                                          fontWeight: FontWeight.w500,
+                                          height: bodyLineHeight,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const TextSpan(
-                                  text:
-                                      ' zikrini tamamladın.\n'
-                                      'Allah kabul etsin, kalbine huzur,\n'
-                                      'gönlüne ferahlık versin.',
+                                Positioned(
+                                  left: cardWidth * buttonSideFactor,
+                                  right: cardWidth * buttonSideFactor,
+                                  bottom: cardHeight * praiseButtonBottomFactor,
+                                  child: _CompletionPraiseButton(
+                                    scale: scale,
+                                    onPressed: onDismiss,
+                                  ),
+                                ),
+                                Positioned(
+                                  left: cardWidth * buttonSideFactor,
+                                  right: cardWidth * buttonSideFactor,
+                                  bottom: cardHeight * resetButtonBottomFactor,
+                                  child: _CompletionResetButton(
+                                    scale: scale,
+                                    onPressed: onReset,
+                                  ),
                                 ),
                               ],
                             ),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: _primaryGreen.withValues(alpha: 0.90),
-                              fontSize: bodySize,
-                              fontWeight: FontWeight.w500,
-                              height: 1.38,
-                            ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                    Positioned(
-                      left: cardWidth * 0.18,
-                      right: cardWidth * 0.18,
-                      bottom: cardHeight * 0.205,
-                      child: _CompletionPraiseButton(
-                        scale: scale,
-                        onPressed: onDismiss,
-                      ),
-                    ),
-                    Positioned(
-                      left: cardWidth * 0.26,
-                      right: cardWidth * 0.26,
-                      bottom: cardHeight * 0.126,
-                      child: _CompletionResetButton(
-                        scale: scale,
-                        onPressed: onReset,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -1886,7 +2467,7 @@ class _CompletionPraiseButton extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 17 * scale),
+                padding: EdgeInsets.symmetric(horizontal: 12 * scale),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1897,17 +2478,17 @@ class _CompletionPraiseButton extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: const Color(0xFFF2DE9B),
-                          fontSize: (14 * scale).clamp(13, 15.8).toDouble(),
+                          fontSize: (12.4 * scale).clamp(11.6, 13.2).toDouble(),
                           fontWeight: FontWeight.w800,
                           height: 1,
                         ),
                       ),
                     ),
-                    SizedBox(width: 13 * scale),
+                    SizedBox(width: 8 * scale),
                     Icon(
                       Icons.favorite_border_rounded,
                       color: const Color(0xFFF2DE9B),
-                      size: (19 * scale).clamp(18, 21).toDouble(),
+                      size: (17 * scale).clamp(15.5, 18.5).toDouble(),
                     ),
                   ],
                 ),
@@ -3067,6 +3648,7 @@ class _PrimaryModeButton extends StatelessWidget {
     final dimension = (70 * scale).clamp(64, 78).toDouble();
     final iconSize = (22 * scale).clamp(20, 24).toDouble();
     final labelSize = (9.8 * scale).clamp(9, 10.8).toDouble();
+    final statusDotSize = (9.2 * scale).clamp(8.2, 10.2).toDouble();
 
     return Container(
       width: dimension,
@@ -3086,59 +3668,110 @@ class _PrimaryModeButton extends StatelessWidget {
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        shape: CircleBorder(
-          side: BorderSide(color: _gold.withValues(alpha: 0.62), width: 1.2),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          splashColor: _gold.withValues(alpha: 0.14),
-          highlightColor: _gold.withValues(alpha: 0.08),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: selected
-                    ? const [
-                        _referenceModeTop,
-                        _referenceModeMiddle,
-                        _referenceModeBottom,
-                      ]
-                    : [
-                        _referenceModeTop.withValues(alpha: 0.78),
-                        _referenceModeMiddle.withValues(alpha: 0.82),
-                        _referenceModeBottom.withValues(alpha: 0.88),
-                      ],
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.grain_rounded,
-                  color: selected ? _gold : _cream.withValues(alpha: 0.86),
-                  size: iconSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Material(
+              color: Colors.transparent,
+              shape: CircleBorder(
+                side: BorderSide(
+                  color: _gold.withValues(alpha: 0.62),
+                  width: 1.2,
                 ),
-                SizedBox(height: 4 * scale),
-                Text(
-                  'TESBİH\nMODU',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _cream,
-                    fontSize: labelSize,
-                    fontWeight: FontWeight.w800,
-                    height: 0.98,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onPressed,
+                splashColor: _gold.withValues(alpha: 0.14),
+                highlightColor: _gold.withValues(alpha: 0.08),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: selected
+                          ? const [
+                              _referenceModeTop,
+                              _referenceModeMiddle,
+                              _referenceModeBottom,
+                            ]
+                          : [
+                              _referenceModeTop.withValues(alpha: 0.78),
+                              _referenceModeMiddle.withValues(alpha: 0.82),
+                              _referenceModeBottom.withValues(alpha: 0.88),
+                            ],
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.grain_rounded,
+                        color: selected
+                            ? _gold
+                            : _cream.withValues(alpha: 0.86),
+                        size: iconSize,
+                      ),
+                      SizedBox(height: 4 * scale),
+                      Text(
+                        'TESBİH\nMODU',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _cream,
+                          fontSize: labelSize,
+                          fontWeight: FontWeight.w800,
+                          height: 0.98,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          Positioned(
+            top: (8.0 * scale).clamp(7.0, 9.5).toDouble(),
+            right: (12.0 * scale).clamp(10.5, 13.5).toDouble(),
+            child: IgnorePointer(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                width: statusDotSize,
+                height: statusDotSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected
+                      ? const Color(0xFFFFDC68)
+                      : _gold.withValues(alpha: 0.30),
+                  border: Border.all(
+                    color: selected
+                        ? _cream.withValues(alpha: 0.88)
+                        : _cream.withValues(alpha: 0.26),
+                    width: 0.75 * scale,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: selected
+                          ? _gold.withValues(alpha: 0.86)
+                          : _deepGreen.withValues(alpha: 0.06),
+                      blurRadius: (selected ? 9 : 2.2) * scale,
+                      spreadRadius: selected ? 0.7 * scale : 0,
+                    ),
+                    if (selected)
+                      BoxShadow(
+                        color: Colors.white.withValues(alpha: 0.44),
+                        blurRadius: 3 * scale,
+                        offset: Offset(0, -0.4 * scale),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
