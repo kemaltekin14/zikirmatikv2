@@ -22,7 +22,7 @@ const _menuDivider = Color(0xFFDDE4D9);
 const _wordmarkSuffixGreen = Color(0xFF828C6F);
 const _logoAsset = 'assets/images/splash_logo_icon.png';
 const _bottomMotifAsset = 'assets/images/menu_bottom_motif.webp';
-const _drawerCloseNavigationDelay = Duration(milliseconds: 280);
+const _cupertinoDrawerCloseNavigationDelay = Duration(milliseconds: 280);
 
 void openAppMenu(BuildContext context) {
   Scaffold.maybeOf(context)?.openDrawer();
@@ -466,16 +466,17 @@ Future<void> _navigateTo(
   final currentPath = GoRouterState.of(context).uri.path;
   final shouldNavigate = currentPath != route;
   final scaffold = Scaffold.maybeOf(context);
+  final navigationDelay = _drawerNavigationDelayFor(context);
 
   if (scaffold?.isDrawerOpen ?? false) {
     scaffold!.closeDrawer();
-    if (shouldNavigate) {
-      await Future<void>.delayed(_drawerCloseNavigationDelay);
+    if (shouldNavigate && navigationDelay > Duration.zero) {
+      await Future<void>.delayed(navigationDelay);
     }
   } else {
     Navigator.of(context).pop();
-    if (shouldNavigate) {
-      await Future<void>.delayed(_drawerCloseNavigationDelay);
+    if (shouldNavigate && navigationDelay > Duration.zero) {
+      await Future<void>.delayed(navigationDelay);
     }
   }
 
@@ -485,6 +486,15 @@ Future<void> _navigateTo(
   } else {
     router.go(route);
   }
+}
+
+Duration _drawerNavigationDelayFor(BuildContext context) {
+  final platform = Theme.of(context).platform;
+  return switch (platform) {
+    TargetPlatform.iOS ||
+    TargetPlatform.macOS => _cupertinoDrawerCloseNavigationDelay,
+    _ => Duration.zero,
+  };
 }
 
 class _MenuItemData {

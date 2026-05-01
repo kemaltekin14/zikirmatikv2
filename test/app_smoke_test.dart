@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -231,9 +232,40 @@ void main() {
     },
   );
 
-  testWidgets('menu waits for drawer close before returning home', (
+  testWidgets('cupertino menu waits for drawer close before returning home', (
     tester,
   ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await pumpMobileApp(tester);
+
+      await tester.tap(find.byKey(const Key('home.chooseDhikr')));
+      await pumpUntilFound(tester, find.byType(DhikrLibraryScreen));
+      await openMenu(tester);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Drawer),
+          matching: find.text('Ana Sayfa'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(DhikrLibraryScreen), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUntilFound(tester, find.byType(HomeScreen));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(Drawer), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('material menu returns home without extra delay', (tester) async {
     await pumpMobileApp(tester);
 
     await tester.tap(find.byKey(const Key('home.chooseDhikr')));
@@ -247,15 +279,12 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-
-    expect(find.byType(DhikrLibraryScreen), findsOneWidget);
-
-    await tester.pump(const Duration(milliseconds: 500));
-    await pumpUntilFound(tester, find.byType(HomeScreen));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(HomeScreen), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 350));
+
     expect(find.byType(Drawer), findsNothing);
   });
 
