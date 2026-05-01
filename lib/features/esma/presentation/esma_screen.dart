@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/router/app_router.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../../shared/layout/proportional_layout.dart';
+import '../../../shared/widgets/app_menu_drawer.dart';
 import '../../counter/application/counter_controller.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../data/esma_data.dart';
@@ -96,6 +97,7 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
         child: Scaffold(
           backgroundColor: _pageBackground,
           extendBody: true,
+          drawer: const AppMenuDrawer(),
           body: Stack(
             children: [
               const Positioned.fill(child: ColoredBox(color: _pageBackground)),
@@ -443,7 +445,7 @@ class _HeroMenuButton extends StatelessWidget {
         ),
         child: IconButton(
           tooltip: 'Menü',
-          onPressed: () {},
+          onPressed: () => openAppMenu(context),
           icon: Icon(
             Icons.menu_rounded,
             color: _primaryGreen,

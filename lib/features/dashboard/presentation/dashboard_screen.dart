@@ -16,6 +16,7 @@ import '../../dhikr_library/application/dhikr_providers.dart';
 import '../../dhikr_library/data/builtin_dhikrs.dart';
 import '../../dhikr_library/domain/dhikr_item.dart';
 import '../../../shared/layout/proportional_layout.dart';
+import '../../../shared/widgets/app_menu_drawer.dart';
 
 const _pageBackground = Color(0xFFE9EEE4);
 const _primaryGreen = Color(0xFF13472F);
@@ -95,6 +96,7 @@ class HomeScreen extends StatelessWidget {
         child: Scaffold(
           backgroundColor: _pageBackground,
           extendBody: true,
+          drawer: const AppMenuDrawer(),
           body: Stack(
             children: [
               const Positioned.fill(child: ColoredBox(color: _pageBackground)),
@@ -273,7 +275,7 @@ class HeaderActions extends StatelessWidget {
             size: size,
             icon: Icons.menu_rounded,
             iconSize: iconSize,
-            onPressed: () {},
+            onPressed: () => openAppMenu(context),
           ),
           SizedBox(width: 14 * scale),
           DashboardBrandWordmark(scale: scale, height: size),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../../shared/layout/proportional_layout.dart';
+import '../../../shared/widgets/app_menu_drawer.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../settings/application/settings_controller.dart';
 import '../application/dhikr_providers.dart';
@@ -83,6 +84,7 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
         child: Scaffold(
           backgroundColor: _pageBackground,
           extendBody: true,
+          drawer: const AppMenuDrawer(),
           body: Stack(
             children: [
               const Positioned.fill(child: ColoredBox(color: _pageBackground)),
@@ -700,7 +702,7 @@ class _HeroMenuButton extends StatelessWidget {
         ),
         child: IconButton(
           tooltip: 'Menü',
-          onPressed: () {},
+          onPressed: () => openAppMenu(context),
           icon: Icon(
             Icons.menu_rounded,
             color: _primaryGreen,

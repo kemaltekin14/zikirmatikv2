@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../shared/layout/proportional_layout.dart';
+import '../../../shared/widgets/app_menu_drawer.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 
 const _pageBackground = Color(0xFFE9EEE4);
@@ -66,6 +67,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         child: Scaffold(
           backgroundColor: _pageBackground,
           extendBody: true,
+          drawer: const AppMenuDrawer(),
           body: Stack(
             children: [
               const Positioned.fill(child: ColoredBox(color: _pageBackground)),
@@ -406,7 +408,7 @@ class _HeroMenuButton extends StatelessWidget {
         ),
         child: IconButton(
           tooltip: 'Menü',
-          onPressed: () {},
+          onPressed: () => openAppMenu(context),
           icon: Icon(
             Icons.menu_rounded,
             color: _primaryGreen,
