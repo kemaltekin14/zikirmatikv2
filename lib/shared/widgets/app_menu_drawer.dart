@@ -171,26 +171,10 @@ class _MenuBrandHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
-          width: 50 * scale,
-          height: 50 * scale,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF245D43), Color(0xFF103E2A)],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: _menuGreen.withValues(alpha: 0.16),
-                blurRadius: 16 * scale,
-                offset: Offset(0, 7 * scale),
-              ),
-            ],
-          ),
+        SizedBox.square(
+          dimension: 60 * scale,
           child: Padding(
-            padding: EdgeInsets.all(9.5 * scale),
+            padding: EdgeInsets.all(2 * scale),
             child: Image.asset(
               _logoAsset,
               fit: BoxFit.contain,
