@@ -52,6 +52,7 @@ class DhikrDetailScreen extends ConsumerStatefulWidget {
 class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
   int _selectedTarget = 33;
   int? _customTarget;
+  String? _activeDhikrId;
 
   @override
   Widget build(BuildContext context) {
@@ -94,11 +95,7 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
                     orElse: () => dhikrs.first,
                   );
                   final detail = _DhikrDetailContent.forItem(item);
-                  if (_selectedTarget != 0 &&
-                      _selectedTarget != _customTarget &&
-                      !_fixedTargetOptions.contains(_selectedTarget)) {
-                    _selectedTarget = _fixedTargetOptions.first;
-                  }
+                  _syncTargetForItem(item);
 
                   return SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
@@ -191,11 +188,7 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
                     orElse: () => dhikrs.first,
                   );
                   final detail = _DhikrDetailContent.forItem(item);
-                  if (_selectedTarget != 0 &&
-                      _selectedTarget != _customTarget &&
-                      !_fixedTargetOptions.contains(_selectedTarget)) {
-                    _selectedTarget = _fixedTargetOptions.first;
-                  }
+                  _syncTargetForItem(item);
 
                   return Align(
                     alignment: Alignment.topCenter,
@@ -291,6 +284,16 @@ class _DhikrDetailScreenState extends ConsumerState<DhikrDetailScreen> {
   void _selectTarget(int target) {
     setState(() => _selectedTarget = target);
     ref.read(interactionFeedbackServiceProvider).selection();
+  }
+
+  void _syncTargetForItem(DhikrItem item) {
+    if (_activeDhikrId == item.id) return;
+
+    _activeDhikrId = item.id;
+    _selectedTarget = item.defaultTarget;
+    _customTarget = _fixedTargetOptions.contains(item.defaultTarget)
+        ? null
+        : item.defaultTarget;
   }
 
   Future<void> _showCustomTargetDialog() async {
@@ -681,7 +684,7 @@ class _TargetCard extends StatelessWidget {
             children: [
               for (final target in _fixedTargetOptions) ...[
                 SizedBox(
-                  width: 50 * scale,
+                  width: 56 * scale,
                   child: _TargetChip(
                     scale: scale,
                     label: '$target',
@@ -689,7 +692,7 @@ class _TargetCard extends StatelessWidget {
                     onTap: () => onChanged(target),
                   ),
                 ),
-                SizedBox(width: 5 * scale),
+                SizedBox(width: 6 * scale),
               ],
               Expanded(
                 child: _TargetChip(
@@ -700,7 +703,7 @@ class _TargetCard extends StatelessWidget {
                   onTap: onCustomTarget,
                 ),
               ),
-              SizedBox(width: 5 * scale),
+              SizedBox(width: 6 * scale),
               Expanded(
                 child: _TargetChip(
                   scale: scale,
@@ -740,7 +743,7 @@ class _TargetChip extends StatelessWidget {
     final innerRadius = selected ? radius - selectedOutlineWidth : radius;
 
     return SizedBox(
-      height: 34 * scale,
+      height: 39 * scale,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
@@ -785,7 +788,7 @@ class _TargetChip extends StatelessWidget {
                 onTap: onTap,
                 child: Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 3 * scale),
+                    padding: EdgeInsets.symmetric(horizontal: 5 * scale),
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Row(
@@ -795,15 +798,15 @@ class _TargetChip extends StatelessWidget {
                             Icon(
                               icon,
                               color: selected ? Colors.white : _primaryGreen,
-                              size: 13.5 * scale,
+                              size: 15 * scale,
                             ),
-                            SizedBox(width: 2.5 * scale),
+                            SizedBox(width: 3.5 * scale),
                           ],
                           Text(
                             label,
                             style: TextStyle(
                               color: selected ? Colors.white : _primaryGreen,
-                              fontSize: 11.6 * scale,
+                              fontSize: 12.8 * scale,
                               fontWeight: FontWeight.w800,
                               height: 1,
                             ),
@@ -1463,7 +1466,10 @@ class _DhikrDetailContent {
       arabic: item.arabicText ?? item.name,
       transliteration: item.name,
       shortMeaning: item.meaning ?? '',
-      longMeaning: item.meaning ?? 'Bu zikir için detay metni hazırlanıyor.',
+      longMeaning:
+          item.longMeaning ??
+          item.meaning ??
+          'Bu zikir için detay metni hazırlanıyor.',
     );
   }
 }

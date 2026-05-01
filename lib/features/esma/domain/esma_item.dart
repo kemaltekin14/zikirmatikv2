@@ -5,28 +5,48 @@ class EsmaItem {
     required this.number,
     required this.name,
     required this.arabicText,
+    required this.dhikrName,
+    required this.dhikrArabicText,
     required this.meaning,
     required this.category,
-    required this.categoryIcon,
+    required this.ebcedNumber,
+    this.explanation,
   });
 
   final int number;
   final String name;
   final String arabicText;
+  final String dhikrName;
+  final String dhikrArabicText;
   final String meaning;
   final String category;
-  final EsmaCategoryIcon categoryIcon;
+  final int ebcedNumber;
+  final String? explanation;
+
+  EsmaCategoryIcon get categoryIcon {
+    return switch (category) {
+      'Rahmet' => EsmaCategoryIcon.heart,
+      'Rızık' => EsmaCategoryIcon.leaf,
+      'Koruma' => EsmaCategoryIcon.shield,
+      'Hikmet' => EsmaCategoryIcon.balance,
+      'Celal' => EsmaCategoryIcon.crown,
+      'Mülk' => EsmaCategoryIcon.crown,
+      'Yaratılış' => EsmaCategoryIcon.spark,
+      _ => EsmaCategoryIcon.star,
+    };
+  }
 
   DhikrItem toDhikr() {
     return DhikrItem(
       id: 'esma-$number',
-      name: name,
-      arabicText: arabicText,
+      name: dhikrName,
+      arabicText: dhikrArabicText,
       meaning: meaning,
+      longMeaning: explanation,
       category: 'Esma-ül Hüsna',
-      defaultTarget: 100,
+      defaultTarget: ebcedNumber,
     );
   }
 }
 
-enum EsmaCategoryIcon { heart, crown, starOutline, starFilled }
+enum EsmaCategoryIcon { heart, crown, star, leaf, shield, balance, spark }

@@ -78,7 +78,7 @@ class CounterController extends Notifier<CounterState> {
     state = state.copyWith(target: target, completed: false);
   }
 
-  void increment() {
+  void increment({bool useTesbihFeedback = false}) {
     if (!state.isInfinite && state.count >= state.target) return;
 
     final nextCount = state.count + 1;
@@ -88,6 +88,8 @@ class CounterController extends Notifier<CounterState> {
     final feedback = ref.read(interactionFeedbackServiceProvider);
     if (completed) {
       feedback.success();
+    } else if (useTesbihFeedback) {
+      feedback.tesbihTick();
     } else {
       feedback.counterTick();
     }

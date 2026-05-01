@@ -35,7 +35,7 @@ const _homeQuoteTextMaxScale = 1.14;
 const _homeBottomNavBaseHeight = 76.0;
 const _homeBottomNavBaseGap = 10.0;
 const _homeBottomNavMaxSafeInset = 4.0;
-const _homeScrollExtraBottomSpacing = 40.0;
+const _homeScrollBottomSpacing = 12.0;
 const _todayEsmaCardBackgroundAsset =
     'assets/images/today_esma_card_background.png';
 
@@ -79,8 +79,7 @@ class HomeScreen extends StatelessWidget {
     final bottomNavHeight = _homeBottomNavBaseHeight * scale;
     final bottomNavOffset = _homeBottomNavBottomOffset(safeBottom, scale);
     final bottomNavReservedHeight = bottomNavHeight + bottomNavOffset;
-    final scrollBottomPadding =
-        bottomNavReservedHeight + _homeScrollExtraBottomSpacing * scale;
+    final scrollBottomPadding = _homeScrollBottomSpacing * scale;
 
     final textScale = media.textScaler.scale(1).clamp(1.0, 1.14).toDouble();
 
@@ -100,13 +99,6 @@ class HomeScreen extends StatelessWidget {
           body: Stack(
             children: [
               const Positioned.fill(child: ColoredBox(color: _pageBackground)),
-              MosqueHeroLayer(
-                scale: scale,
-                contentWidth: contentWidth,
-                menuLeft: menuLeft,
-                menuSize: menuSize,
-                quoteHeight: quoteHeight,
-              ),
               Positioned(
                 top: 0,
                 left: 0,
@@ -114,45 +106,62 @@ class HomeScreen extends StatelessWidget {
                 bottom: bottomNavReservedHeight,
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.only(
-                    top: contentTop,
-                    bottom: scrollBottomPadding,
-                  ),
-                  child: Center(
-                    child: SizedBox(
-                      width: contentWidth,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 18 * scale,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: EdgeInsets.only(bottom: scrollBottomPadding),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      MosqueHeroLayer(
+                        scale: scale,
+                        contentWidth: contentWidth,
+                        menuLeft: menuLeft,
+                        menuSize: menuSize,
+                        quoteHeight: quoteHeight,
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(top: contentTop),
+                        child: Center(
+                          child: SizedBox(
+                            width: contentWidth,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(child: TodayZikrCard(scale: scale)),
-                                SizedBox(width: 14 * scale),
-                                Expanded(child: StartZikrCard(scale: scale)),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 18 * scale,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: TodayZikrCard(scale: scale),
+                                      ),
+                                      SizedBox(width: 14 * scale),
+                                      Expanded(
+                                        child: StartZikrCard(scale: scale),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(height: 16 * scale),
+                                ContinueZikrCard(scale: scale),
+                                SizedBox(height: 14 * scale),
+                                CategoryZikrSection(scale: scale),
                               ],
                             ),
                           ),
-                          SizedBox(height: 16 * scale),
-                          ContinueZikrCard(scale: scale),
-                          SizedBox(height: 14 * scale),
-                          CategoryZikrSection(scale: scale),
-                        ],
+                        ),
                       ),
-                    ),
+                      HeaderActions(
+                        top: menuTop,
+                        left: menuLeft,
+                        size: menuSize,
+                        iconSize: menuIconSize,
+                        scale: scale,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              HeaderActions(
-                top: menuTop,
-                left: menuLeft,
-                size: menuSize,
-                iconSize: menuIconSize,
-                scale: scale,
               ),
               HomeBottomNav(scale: scale, contentWidth: contentWidth),
             ],
@@ -224,7 +233,7 @@ class MosqueHeroLayer extends StatelessWidget {
                     child: SizedBox(
                       width: mosqueWidth,
                       child: Image.asset(
-                        'assets/images/home_mosque.png',
+                        'assets/images/home_mosque.webp',
                         fit: BoxFit.fitWidth,
                         alignment: Alignment.topRight,
                       ),

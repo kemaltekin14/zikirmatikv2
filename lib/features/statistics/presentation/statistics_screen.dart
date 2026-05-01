@@ -20,11 +20,12 @@ const _dividerColor = Color(0xFFDDE4D9);
 const _bottomNavBaseHeight = 76.0;
 const _bottomNavBaseGap = 10.0;
 const _bottomNavMaxSafeInset = 4.0;
-const _scrollExtraBottomSpacing = 42.0;
+const _scrollExtraBottomSpacing = 14.0;
 
 const _statisticsHeroAsset = 'assets/images/istatistikler-hero.webp';
 const _periods = ['Genel Bakış', 'Günlük', 'Haftalık', 'Aylık', 'Yıllık'];
 const _statisticsPillLift = 56.0;
+const _monthlyProgressValues = [5200, 8500, 12000, 15500, 14200, 11800];
 
 double _bottomNavBottomOffset(double safeBottom, double scale) {
   final visualSafeInset = math.min(safeBottom, _bottomNavMaxSafeInset * scale);
@@ -40,6 +41,8 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   String _selectedPeriod = _periods.first;
+  late DateTime _selectedDailyDate = _dateOnly(DateTime.now());
+  late int _selectedOverviewYear = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
@@ -51,8 +54,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final bottomNavHeight = _bottomNavBaseHeight * scale;
     final bottomNavOffset = _bottomNavBottomOffset(safeBottom, scale);
     final bottomReservedHeight = bottomNavHeight + bottomNavOffset;
-    final scrollBottomPadding =
-        bottomReservedHeight + _scrollExtraBottomSpacing * scale;
+    final scrollBottomPadding = _scrollExtraBottomSpacing * scale;
     final textScale = media.textScaler.scale(1).clamp(1.0, 1.14).toDouble();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -93,13 +95,37 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                 setState(() => _selectedPeriod = period),
                           ),
                           SizedBox(height: 4 * scale),
-                          _OverviewCard(scale: scale),
-                          SizedBox(height: 10 * scale),
-                          _DayPartDistributionCard(scale: scale),
-                          SizedBox(height: 10 * scale),
-                          _ResponsiveChartPair(scale: scale),
-                          SizedBox(height: 10 * scale),
-                          _MonthlyProgressCard(scale: scale),
+                          if (_selectedPeriod == 'Günlük')
+                            _DailyStatisticsSection(
+                              scale: scale,
+                              selectedDate: _selectedDailyDate,
+                              onPickDate: () => _pickDailyDate(context),
+                              onPreviousDate: () => _changeDailyDate(-1),
+                              onNextDate: () => _changeDailyDate(1),
+                            )
+                          else ...[
+                            _OverviewCard(
+                              scale: scale,
+                              selectedYear: _selectedOverviewYear,
+                              onYearSelected: (year) =>
+                                  setState(() => _selectedOverviewYear = year),
+                            ),
+                            SizedBox(height: 10 * scale),
+                            _ResponsiveChartPair(
+                              scale: scale,
+                              selectedYear: _selectedOverviewYear,
+                            ),
+                            SizedBox(height: 10 * scale),
+                            _DayPartDistributionCard(
+                              scale: scale,
+                              selectedYear: _selectedOverviewYear,
+                            ),
+                            SizedBox(height: 10 * scale),
+                            _YearlyMonthlyOverviewCard(
+                              scale: scale,
+                              selectedYear: _selectedOverviewYear,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -118,7 +144,47 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       ),
     );
   }
+
+  void _changeDailyDate(int dayDelta) {
+    setState(() {
+      _selectedDailyDate = _dateOnly(
+        _selectedDailyDate.add(Duration(days: dayDelta)),
+      );
+    });
+  }
+
+  Future<void> _pickDailyDate(BuildContext context) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDailyDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: _buttonGreen,
+              onPrimary: Colors.white,
+              surface: _cardBackground,
+              onSurface: _primaryText,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedDailyDate = _dateOnly(pickedDate);
+    });
+  }
 }
+
+DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 
 class _StatisticsTopCluster extends StatelessWidget {
   const _StatisticsTopCluster({
@@ -532,27 +598,718 @@ class _PeriodPill extends StatelessWidget {
   }
 }
 
-class _OverviewCard extends StatelessWidget {
-  const _OverviewCard({required this.scale});
+class _DailyStatisticsSection extends StatelessWidget {
+  const _DailyStatisticsSection({
+    required this.scale,
+    required this.selectedDate,
+    required this.onPickDate,
+    required this.onPreviousDate,
+    required this.onNextDate,
+  });
 
   final double scale;
+  final DateTime selectedDate;
+  final VoidCallback onPickDate;
+  final VoidCallback onPreviousDate;
+  final VoidCallback onNextDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DailySummaryCard(
+          scale: scale,
+          selectedDate: selectedDate,
+          onPickDate: onPickDate,
+          onPreviousDate: onPreviousDate,
+          onNextDate: onNextDate,
+        ),
+        SizedBox(height: 10 * scale),
+        _TopDailyDhikrsCard(scale: scale),
+        SizedBox(height: 10 * scale),
+        _HourlyDistributionCard(scale: scale),
+        SizedBox(height: 10 * scale),
+        _DailyProgressCard(scale: scale),
+      ],
+    );
+  }
+}
+
+class _DailySummaryCard extends StatelessWidget {
+  const _DailySummaryCard({
+    required this.scale,
+    required this.selectedDate,
+    required this.onPickDate,
+    required this.onPreviousDate,
+    required this.onNextDate,
+  });
+
+  final double scale;
+  final DateTime selectedDate;
+  final VoidCallback onPickDate;
+  final VoidCallback onPreviousDate;
+  final VoidCallback onNextDate;
 
   @override
   Widget build(BuildContext context) {
     const metrics = [
       _MetricData(
         icon: Icons.spa_rounded,
-        value: '15.432',
+        value: '1.842',
         label: 'Toplam Zikir',
         color: _buttonGreen,
       ),
       _MetricData(
         icon: Icons.calendar_today_rounded,
-        value: '365',
+        value: '12',
+        label: 'Aktif Zikir',
+        color: _primaryGreen,
+      ),
+      _MetricData(
+        icon: Icons.schedule_rounded,
+        value: '1sa 48dk',
+        label: 'Toplam Süre',
+        color: _buttonGreen,
+      ),
+      _MetricData(
+        icon: Icons.star_rounded,
+        value: '4.7',
+        label: 'Ortalama/Gün',
+        color: _gold,
+      ),
+    ];
+
+    return _StatsCard(
+      scale: scale,
+      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
+      padding: EdgeInsets.fromLTRB(
+        14 * scale,
+        13 * scale,
+        14 * scale,
+        13 * scale,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(18 * scale),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18 * scale),
+                    onTap: onPickDate,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 6 * scale,
+                        vertical: 6 * scale,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            color: _secondaryText,
+                            size: 16 * scale,
+                          ),
+                          SizedBox(width: 10 * scale),
+                          Flexible(
+                            child: Text(
+                              _formatDailyDate(selectedDate),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _primaryText,
+                                fontSize: 14.2 * scale,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 4 * scale),
+                          Icon(
+                            Icons.expand_more_rounded,
+                            color: _secondaryText,
+                            size: 17 * scale,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _DailyDateArrowButton(
+                scale: scale,
+                icon: Icons.chevron_left_rounded,
+                onPressed: onPreviousDate,
+              ),
+              SizedBox(width: 8 * scale),
+              _DailyDateArrowButton(
+                scale: scale,
+                icon: Icons.chevron_right_rounded,
+                onPressed: onNextDate,
+              ),
+            ],
+          ),
+          SizedBox(height: 13 * scale),
+          _DailyInsetPanel(
+            scale: scale,
+            child: Row(
+              children: [
+                for (var i = 0; i < metrics.length; i++) ...[
+                  Expanded(
+                    child: _OverviewMetricTile(
+                      scale: scale,
+                      metric: metrics[i],
+                    ),
+                  ),
+                  if (i != metrics.length - 1)
+                    _SubtleVerticalDivider(scale: scale),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyDateArrowButton extends StatelessWidget {
+  const _DailyDateArrowButton({
+    required this.scale,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final double scale;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 35 * scale,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _pageBackground.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(12 * scale),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.65),
+            width: 0.7 * scale,
+          ),
+        ),
+        child: IconButton(
+          tooltip: 'Tarih değiştir',
+          padding: EdgeInsets.zero,
+          onPressed: onPressed,
+          icon: Icon(icon, color: _primaryGreen, size: 22 * scale),
+        ),
+      ),
+    );
+  }
+}
+
+class _DailySummaryMetricTile extends StatelessWidget {
+  const _DailySummaryMetricTile({required this.scale, required this.metric});
+
+  final double scale;
+  final _MetricData metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MetricIconBubble(scale: scale, icon: metric.icon, color: metric.color),
+        SizedBox(height: 9 * scale),
+        SizedBox(
+          width: 58 * scale,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              metric.value,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 14.7 * scale,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: 5 * scale),
+        SizedBox(
+          width: 60 * scale,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              metric.label,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                color: _secondaryText,
+                fontSize: 8.1 * scale,
+                fontWeight: FontWeight.w700,
+                height: 1.08,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DailyProgressCard extends StatelessWidget {
+  const _DailyProgressCard({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StatsCard(
+      scale: scale,
+      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
+      padding: EdgeInsets.fromLTRB(
+        15 * scale,
+        14 * scale,
+        15 * scale,
+        14 * scale,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Bugünkü İlerleme',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 15.5 * scale,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ),
+              Text(
+                '%73',
+                style: TextStyle(
+                  color: _primaryGreen,
+                  fontSize: 20 * scale,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 13 * scale),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 8 * scale,
+              value: 0.73,
+              color: _buttonGreen,
+              backgroundColor: _dividerColor.withValues(alpha: 0.70),
+            ),
+          ),
+          SizedBox(height: 11 * scale),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '1.842 / 2.500 hedef',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _secondaryText,
+                    fontSize: 11.4 * scale,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+              ),
+              Icon(Icons.edit_rounded, color: _secondaryText, size: 13 * scale),
+              SizedBox(width: 5 * scale),
+              Text(
+                'Hedefini Düzenle',
+                style: TextStyle(
+                  color: _secondaryText,
+                  fontSize: 11.2 * scale,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HourlyDistributionCard extends StatelessWidget {
+  const _HourlyDistributionCard({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StatsCard(
+      scale: scale,
+      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
+      padding: EdgeInsets.fromLTRB(
+        15 * scale,
+        14 * scale,
+        15 * scale,
+        12 * scale,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Saatlik Dağılım',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 15.5 * scale,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ),
+              Text(
+                'Detaylı Gör',
+                style: TextStyle(
+                  color: _primaryGreen,
+                  fontSize: 11.4 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: _primaryGreen,
+                size: 16 * scale,
+              ),
+            ],
+          ),
+          SizedBox(height: 14 * scale),
+          SizedBox(
+            height: 112 * scale,
+            child: CustomPaint(
+              painter: _HourlyDistributionPainter(scale: scale),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopDailyDhikrsCard extends StatelessWidget {
+  const _TopDailyDhikrsCard({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      _DailyDhikrRank(1, 'Subhanallah', 652, 0.92),
+      _DailyDhikrRank(2, 'Elhamdülillah', 487, 0.76),
+      _DailyDhikrRank(3, 'Allahu Ekber', 356, 0.59),
+      _DailyDhikrRank(4, 'Estağfirullah', 347, 0.55),
+    ];
+
+    return _StatsCard(
+      scale: scale,
+      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
+      padding: EdgeInsets.fromLTRB(
+        15 * scale,
+        15 * scale,
+        15 * scale,
+        13 * scale,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'En Çok Yapılan Zikirler',
+            style: TextStyle(
+              color: _primaryText,
+              fontSize: 15.5 * scale,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          SizedBox(height: 12 * scale),
+          for (var i = 0; i < items.length; i++) ...[
+            _DailyDhikrRankRow(scale: scale, item: items[i]),
+            if (i != items.length - 1) SizedBox(height: 10 * scale),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyDhikrRankRow extends StatelessWidget {
+  const _DailyDhikrRankRow({required this.scale, required this.item});
+
+  final double scale;
+  final _DailyDhikrRank item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox.square(
+          dimension: 19 * scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _buttonGreen.withValues(alpha: 0.52),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                item.rank.toString(),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.2 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: 11 * scale),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 12.1 * scale,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    item.value.toString(),
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 12.1 * scale,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
+                  ),
+                  SizedBox(width: 8 * scale),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: _secondaryText,
+                    size: 16 * scale,
+                  ),
+                ],
+              ),
+              SizedBox(height: 6 * scale),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 2.4 * scale,
+                  value: item.progress,
+                  color: _buttonGreen,
+                  backgroundColor: _dividerColor.withValues(alpha: 0.65),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ignore: unused_element
+class _DailyMiniStatsGrid extends StatelessWidget {
+  const _DailyMiniStatsGrid({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      _MetricData(
+        icon: Icons.spa_rounded,
+        value: '2 / 3',
+        label: 'Tamamlanan Hedefler',
+        color: _buttonGreen,
+      ),
+      _MetricData(
+        icon: Icons.calendar_today_rounded,
+        value: '12',
         label: 'Aktif Gün',
         color: _primaryGreen,
       ),
       _MetricData(
+        icon: Icons.schedule_rounded,
+        value: '1sa 48dk',
+        label: 'Toplam Süre',
+        color: _buttonGreen,
+      ),
+      _MetricData(
+        icon: Icons.emoji_events_rounded,
+        value: '8 gün',
+        label: 'En Uzun Seri',
+        color: _gold,
+      ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 18 * scale),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: _DailyMiniStatTile(scale: scale, item: items[i]),
+            ),
+            if (i != items.length - 1) SizedBox(width: 8 * scale),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ignore: unused_element
+class _DailyMiniStatTile extends StatelessWidget {
+  const _DailyMiniStatTile({required this.scale, required this.item});
+
+  final double scale;
+  final _MetricData item;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _cardBackground.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(20 * scale),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.68),
+          width: 0.8 * scale,
+        ),
+        boxShadow: _softShadow(scale),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 7 * scale,
+          vertical: 12 * scale,
+        ),
+        child: Column(
+          children: [
+            _MetricIconBubble(scale: scale, icon: item.icon, color: item.color),
+            SizedBox(height: 8 * scale),
+            Text(
+              item.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _secondaryText,
+                fontSize: 8.8 * scale,
+                fontWeight: FontWeight.w700,
+                height: 1.12,
+              ),
+            ),
+            SizedBox(height: 7 * scale),
+            Text(
+              item.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 14.5 * scale,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyInsetPanel extends StatelessWidget {
+  const _DailyInsetPanel({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.34),
+        borderRadius: BorderRadius.circular(20 * scale),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 8 * scale,
+          vertical: 14 * scale,
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _OverviewCard extends StatelessWidget {
+  const _OverviewCard({
+    required this.scale,
+    required this.selectedYear,
+    required this.onYearSelected,
+  });
+
+  final double scale;
+  final int selectedYear;
+  final ValueChanged<int> onYearSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = [
+      const _MetricData(
+        icon: Icons.spa_rounded,
+        value: '15.432',
+        label: 'Toplam Zikir',
+        color: _buttonGreen,
+      ),
+      const _MetricData(
+        icon: Icons.calendar_today_rounded,
+        value: '365',
+        label: 'Aktif Gün',
+        color: _primaryGreen,
+      ),
+      const _MetricData(
         icon: Icons.schedule_rounded,
         value: '42 sa',
         label: 'Toplam Süre',
@@ -560,8 +1317,8 @@ class _OverviewCard extends StatelessWidget {
       ),
       _MetricData(
         icon: Icons.local_fire_department_rounded,
-        value: '286',
-        label: 'Bugünkü Zikir',
+        value: _formatWholeNumber(_yearAdjustedInt(286, selectedYear)),
+        label: 'Günlük Ort.',
         color: _buttonGreen,
       ),
     ];
@@ -578,13 +1335,20 @@ class _OverviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _OverviewHeader(scale: scale),
+          _OverviewHeader(
+            scale: scale,
+            selectedYear: selectedYear,
+            onYearSelected: onYearSelected,
+          ),
           SizedBox(height: 14 * scale),
           Row(
             children: [
               for (var i = 0; i < metrics.length; i++) ...[
                 Expanded(
-                  child: _OverviewMetricTile(scale: scale, metric: metrics[i]),
+                  child: _DailySummaryMetricTile(
+                    scale: scale,
+                    metric: metrics[i],
+                  ),
                 ),
                 if (i != metrics.length - 1)
                   _SubtleVerticalDivider(scale: scale),
@@ -598,40 +1362,121 @@ class _OverviewCard extends StatelessWidget {
 }
 
 class _OverviewHeader extends StatelessWidget {
-  const _OverviewHeader({required this.scale});
+  const _OverviewHeader({
+    required this.scale,
+    required this.selectedYear,
+    required this.onYearSelected,
+  });
 
   final double scale;
+  final int selectedYear;
+  final ValueChanged<int> onYearSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Genel Bakış',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: _primaryText,
-            fontSize: 15 * scale,
-            fontWeight: FontWeight.w800,
-            height: 1.08,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Genel Bakış',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 15 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1.08,
+                ),
+              ),
+              SizedBox(height: 5 * scale),
+              Text(
+                '$selectedYear yılı özeti',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _secondaryText,
+                  fontSize: 12.2 * scale,
+                  fontWeight: FontWeight.w600,
+                  height: 1.18,
+                ),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: 5 * scale),
-        Text(
-          'Tüm zamanlar özeti',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: _secondaryText,
-            fontSize: 11.1 * scale,
-            fontWeight: FontWeight.w600,
-            height: 1.08,
-          ),
+        _YearSelectorPill(
+          scale: scale,
+          selectedYear: selectedYear,
+          onYearSelected: onYearSelected,
         ),
       ],
+    );
+  }
+}
+
+class _YearSelectorPill extends StatelessWidget {
+  const _YearSelectorPill({
+    required this.scale,
+    required this.selectedYear,
+    required this.onYearSelected,
+  });
+
+  final double scale;
+  final int selectedYear;
+  final ValueChanged<int> onYearSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentYear = DateTime.now().year;
+    final years = [
+      for (var year = currentYear; year >= currentYear - 4; year--) year,
+    ];
+
+    return PopupMenuButton<int>(
+      tooltip: 'Yıl seç',
+      color: _cardBackground,
+      initialValue: selectedYear,
+      onSelected: onYearSelected,
+      itemBuilder: (context) => [
+        for (final year in years)
+          PopupMenuItem<int>(value: year, child: Text('$year yılı')),
+      ],
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _buttonGreen.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 10 * scale,
+            vertical: 7 * scale,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$selectedYear',
+                style: TextStyle(
+                  color: _primaryGreen,
+                  fontSize: 10.7 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+              SizedBox(width: 3 * scale),
+              Icon(
+                Icons.expand_more_rounded,
+                color: _primaryGreen,
+                size: 15 * scale,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -687,10 +1532,40 @@ class _OverviewMetricTile extends StatelessWidget {
   }
 }
 
-class _DayPartDistributionCard extends StatelessWidget {
-  const _DayPartDistributionCard({required this.scale});
+class _MetricIconBubble extends StatelessWidget {
+  const _MetricIconBubble({
+    required this.scale,
+    required this.icon,
+    required this.color,
+  });
 
   final double scale;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      child: SizedBox.square(
+        dimension: 29 * scale,
+        child: Icon(icon, color: color, size: 15 * scale),
+      ),
+    );
+  }
+}
+
+class _DayPartDistributionCard extends StatelessWidget {
+  const _DayPartDistributionCard({
+    required this.scale,
+    required this.selectedYear,
+  });
+
+  final double scale;
+  final int selectedYear;
 
   @override
   Widget build(BuildContext context) {
@@ -754,9 +1629,9 @@ class _DayPartDistributionCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _primaryText,
-                        fontSize: 17 * scale,
+                        fontSize: 15 * scale,
                         fontWeight: FontWeight.w800,
-                        height: 1.1,
+                        height: 1.08,
                       ),
                     ),
                     SizedBox(height: 5 * scale),
@@ -790,7 +1665,7 @@ class _DayPartDistributionCard extends StatelessWidget {
                     vertical: 5.5 * scale,
                   ),
                   child: Text(
-                    'Tüm zamanlar',
+                    '$selectedYear yılı',
                     style: TextStyle(
                       color: _primaryText.withValues(alpha: 0.78),
                       fontSize: 10.2 * scale,
@@ -970,13 +1845,14 @@ class _DayPartRow extends StatelessWidget {
 }
 
 class _ResponsiveChartPair extends StatelessWidget {
-  const _ResponsiveChartPair({required this.scale});
+  const _ResponsiveChartPair({required this.scale, required this.selectedYear});
 
   final double scale;
+  final int selectedYear;
 
   @override
   Widget build(BuildContext context) {
-    final pairCardHeight = 262 * scale;
+    final pairCardHeight = 226 * scale;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 18 * scale),
@@ -988,6 +1864,7 @@ class _ResponsiveChartPair extends StatelessWidget {
               height: pairCardHeight,
               child: _DistributionCard(
                 scale: scale,
+                selectedYear: selectedYear,
                 includeMargin: false,
                 compact: true,
               ),
@@ -997,7 +1874,7 @@ class _ResponsiveChartPair extends StatelessWidget {
           Expanded(
             child: SizedBox(
               height: pairCardHeight,
-              child: _RecordCard(scale: scale),
+              child: _RecordCard(scale: scale, selectedYear: selectedYear),
             ),
           ),
         ],
@@ -1009,11 +1886,13 @@ class _ResponsiveChartPair extends StatelessWidget {
 class _DistributionCard extends StatelessWidget {
   const _DistributionCard({
     required this.scale,
+    required this.selectedYear,
     this.includeMargin = true,
     this.compact = false,
   });
 
   final double scale;
+  final int selectedYear;
   final bool includeMargin;
   final bool compact;
 
@@ -1032,10 +1911,10 @@ class _DistributionCard extends StatelessWidget {
           ? EdgeInsets.symmetric(horizontal: 18 * scale)
           : EdgeInsets.zero,
       padding: EdgeInsets.fromLTRB(
-        (compact ? 11 : 15) * scale,
-        (compact ? 12 : 15) * scale,
-        (compact ? 11 : 15) * scale,
-        (compact ? 11 : 15) * scale,
+        (compact ? 10 : 15) * scale,
+        (compact ? 10 : 15) * scale,
+        (compact ? 9 : 15) * scale,
+        (compact ? 8 : 15) * scale,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,22 +1923,22 @@ class _DistributionCard extends StatelessWidget {
               ? _CompactCardHeader(
                   scale: scale,
                   title: 'Zikir Dağılımı',
-                  description: 'En çok okuduğun zikirler',
+                  description: '$selectedYear yılında en çok okudukların',
                 )
               : _CardHeader(
                   scale: scale,
                   title: 'Zikir Dağılımı',
-                  description: 'En çok okuduğun zikirler',
+                  description: '$selectedYear yılında en çok okudukların',
                 ),
-          SizedBox(height: (compact ? 10 : 16) * scale),
+          SizedBox(height: (compact ? 6 : 16) * scale),
           Center(
             child: SizedBox.square(
-              dimension: (compact ? 104 : 142) * scale,
+              dimension: (compact ? 86 : 142) * scale,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   CustomPaint(
-                    size: Size.square((compact ? 104 : 142) * scale),
+                    size: Size.square((compact ? 86 : 142) * scale),
                     painter: _DonutChartPainter(
                       segments: items
                           .map(
@@ -1099,10 +1978,10 @@ class _DistributionCard extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(height: (compact ? 11 : 16) * scale),
+          SizedBox(height: (compact ? 6 : 16) * scale),
           for (final item in items)
             Padding(
-              padding: EdgeInsets.only(bottom: (compact ? 7 : 8) * scale),
+              padding: EdgeInsets.only(bottom: (compact ? 3.5 : 8) * scale),
               child: _DistributionRow(
                 scale: scale,
                 item: item,
@@ -1140,9 +2019,10 @@ class _DistributionRow extends StatelessWidget {
             item.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            softWrap: false,
             style: TextStyle(
               color: _primaryText,
-              fontSize: (compact ? 9.3 : 11.8) * scale,
+              fontSize: (compact ? 9.1 : 11.8) * scale,
               fontWeight: FontWeight.w700,
               height: 1,
             ),
@@ -1177,9 +2057,10 @@ class _DistributionRow extends StatelessWidget {
 }
 
 class _RecordCard extends StatelessWidget {
-  const _RecordCard({required this.scale});
+  const _RecordCard({required this.scale, required this.selectedYear});
 
   final double scale;
+  final int selectedYear;
 
   @override
   Widget build(BuildContext context) {
@@ -1187,178 +2068,350 @@ class _RecordCard extends StatelessWidget {
       scale: scale,
       margin: EdgeInsets.zero,
       padding: EdgeInsets.fromLTRB(
-        11 * scale,
-        12 * scale,
-        11 * scale,
-        12 * scale,
+        10 * scale,
+        10 * scale,
+        10 * scale,
+        9 * scale,
       ),
-      child: SizedBox(
-        height: 225 * scale,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.emoji_events_rounded,
-                  color: _gold,
-                  size: 14 * scale,
-                ),
-                SizedBox(width: 4 * scale),
-                Text(
-                  'Rekorun',
-                  style: TextStyle(
-                    color: _primaryText,
-                    fontSize: 12.3 * scale,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 11 * scale),
-            Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _primaryGreen.withValues(alpha: 0.07),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.70),
-                    width: 0.8 * scale,
-                  ),
-                ),
-                child: SizedBox.square(
-                  dimension: 64 * scale,
-                  child: Center(
-                    child: Text(
-                      '88',
-                      style: TextStyle(
-                        color: _primaryText,
-                        fontSize: 34 * scale,
-                        fontWeight: FontWeight.w900,
-                        height: 0.95,
-                      ),
-                    ),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.emoji_events_rounded, color: _gold, size: 14 * scale),
+              SizedBox(width: 4 * scale),
+              Text(
+                'Rekorun',
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 12.3 * scale,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
                 ),
               ),
-            ),
-            SizedBox(height: 6 * scale),
-            Text(
-              'zikir',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _secondaryText,
-                fontSize: 10.2 * scale,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-            SizedBox(height: 12 * scale),
-            Text(
-              '18 Nisan Cumartesi',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 10.7 * scale,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
-            ),
-            SizedBox(height: 12 * scale),
-            DecoratedBox(
+            ],
+          ),
+          SizedBox(height: 8 * scale),
+          Center(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: _gold.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14 * scale),
+                color: _primaryGreen.withValues(alpha: 0.07),
+                shape: BoxShape.circle,
                 border: Border.all(
-                  color: _gold.withValues(alpha: 0.22),
-                  width: 0.7 * scale,
+                  color: Colors.white.withValues(alpha: 0.70),
+                  width: 0.8 * scale,
                 ),
               ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 8 * scale,
-                  vertical: 8 * scale,
-                ),
-                child: RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
+              child: SizedBox.square(
+                dimension: 58 * scale,
+                child: Center(
+                  child: Text(
+                    '88',
                     style: TextStyle(
                       color: _primaryText,
-                      fontSize: 8.6 * scale,
-                      fontWeight: FontWeight.w700,
-                      height: 1.25,
+                      fontSize: 31 * scale,
+                      fontWeight: FontWeight.w900,
+                      height: 0.95,
                     ),
-                    children: const [
-                      TextSpan(text: 'Günlük ortalamanın '),
-                      TextSpan(
-                        text: '4.6x katı',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      TextSpan(text: '\nEn çok '),
-                      TextSpan(
-                        text: 'Sübhanallah (84)',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ],
                   ),
                 ),
               ),
             ),
-            const Spacer(),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: _buttonGreen.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(999),
+          ),
+          SizedBox(height: 5 * scale),
+          Text(
+            'zikir',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _secondaryText,
+              fontSize: 10.2 * scale,
+              fontWeight: FontWeight.w700,
+              height: 1,
+            ),
+          ),
+          SizedBox(height: 9 * scale),
+          Text(
+            '18 Nisan $selectedYear',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _primaryText,
+              fontSize: 10.7 * scale,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          SizedBox(height: 9 * scale),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _gold.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14 * scale),
+              border: Border.all(
+                color: _gold.withValues(alpha: 0.22),
+                width: 0.7 * scale,
               ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 9 * scale,
-                  vertical: 7 * scale,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.trending_up_rounded,
-                      color: _buttonGreen,
-                      size: 13 * scale,
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 8 * scale,
+                vertical: 7 * scale,
+              ),
+              child: RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 8.6 * scale,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                  children: const [
+                    TextSpan(text: 'Günlük ortalamanın '),
+                    TextSpan(
+                      text: '4.6x katı',
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    SizedBox(width: 4 * scale),
-                    Flexible(
-                      child: Text(
-                        'En iyi günün',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _primaryText,
-                          fontSize: 9.8 * scale,
-                          fontWeight: FontWeight.w800,
-                          height: 1,
-                        ),
-                      ),
+                    TextSpan(text: '\nEn çok '),
+                    TextSpan(
+                      text: 'Sübhanallah (84)',
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          SizedBox(height: 12 * scale),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _buttonGreen.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 9 * scale,
+                vertical: 6 * scale,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.trending_up_rounded,
+                    color: _buttonGreen,
+                    size: 13 * scale,
+                  ),
+                  SizedBox(width: 4 * scale),
+                  Flexible(
+                    child: Text(
+                      'En iyi günün',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 9.8 * scale,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _MonthlyProgressCard extends StatelessWidget {
+class _YearlyMonthlyOverviewCard extends StatelessWidget {
+  const _YearlyMonthlyOverviewCard({
+    required this.scale,
+    required this.selectedYear,
+  });
+
+  final double scale;
+  final int selectedYear;
+
+  static const _baseValues = [0, 0, 0, 253, 8, 0, 0, 0, 0, 0, 0, 0];
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedMonthIndex = DateTime.now().month - 1;
+    final values = [
+      for (final value in _baseValues) _yearAdjustedInt(value, selectedYear),
+    ];
+    final selectedValue = values[selectedMonthIndex];
+    final previousValue = selectedMonthIndex > 0
+        ? values[selectedMonthIndex - 1]
+        : selectedValue;
+    final monthlyTotal = values.fold<int>(0, (sum, value) => sum + value);
+    final difference = (previousValue - selectedValue).abs();
+    final comparisonMonth = selectedMonthIndex > 0
+        ? _monthAbbreviations[selectedMonthIndex - 1]
+        : _monthAbbreviations[selectedMonthIndex];
+    final comparisonText = previousValue >= selectedValue
+        ? '$comparisonMonth aralığına göre $difference daha az zikir var.'
+        : '$comparisonMonth aralığına göre $difference daha fazla zikir var.';
+
+    return _StatsCard(
+      scale: scale,
+      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
+      padding: EdgeInsets.fromLTRB(
+        15 * scale,
+        15 * scale,
+        15 * scale,
+        14 * scale,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  '$selectedYear yılı Aylık Görünüm',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 15 * scale,
+                    fontWeight: FontWeight.w800,
+                    height: 1.08,
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatWholeNumber(monthlyTotal),
+                    style: TextStyle(
+                      color: _gold,
+                      fontSize: 15 * scale,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                  SizedBox(height: 4 * scale),
+                  Text(
+                    'Aylık Toplam',
+                    style: TextStyle(
+                      color: _secondaryText,
+                      fontSize: 9.4 * scale,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 15 * scale),
+          SizedBox(
+            height: 126 * scale,
+            child: CustomPaint(
+              painter: _YearlyMonthlyBarsPainter(
+                scale: scale,
+                values: values,
+                selectedMonthIndex: selectedMonthIndex,
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+          SizedBox(height: 12 * scale),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _primaryGreen.withValues(alpha: 0.045),
+              borderRadius: BorderRadius.circular(14 * scale),
+              border: Border.all(
+                color: _primaryGreen.withValues(alpha: 0.08),
+                width: 0.8 * scale,
+              ),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                12 * scale,
+                12 * scale,
+                12 * scale,
+                12 * scale,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _monthAbbreviations[selectedMonthIndex],
+                          style: TextStyle(
+                            color: _primaryText,
+                            fontSize: 12.3 * scale,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$selectedValue zikir',
+                        style: TextStyle(
+                          color: _gold,
+                          fontSize: 12.3 * scale,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 9 * scale),
+                  Text(
+                    comparisonText,
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 10.2 * scale,
+                      fontWeight: FontWeight.w600,
+                      height: 1.15,
+                    ),
+                  ),
+                  SizedBox(height: 7 * scale),
+                  Text(
+                    'Dönem toplamının %3’ü bu aralıkta.',
+                    style: TextStyle(
+                      color: _secondaryText,
+                      fontSize: 8.8 * scale,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthlyProgressCard extends StatefulWidget {
   const _MonthlyProgressCard({required this.scale});
 
   final double scale;
 
   @override
+  State<_MonthlyProgressCard> createState() => _MonthlyProgressCardState();
+}
+
+class _MonthlyProgressCardState extends State<_MonthlyProgressCard> {
+  int? _selectedMonthIndex;
+
+  @override
   Widget build(BuildContext context) {
+    final scale = widget.scale;
+
     return _StatsCard(
       scale: scale,
       margin: EdgeInsets.symmetric(horizontal: 18 * scale),
@@ -1379,17 +2432,175 @@ class _MonthlyProgressCard extends StatelessWidget {
           SizedBox(height: 16 * scale),
           SizedBox(
             height: 162 * scale,
-            child: CustomPaint(
-              painter: _LineChartPainter(
-                months: const ['Ara', 'Oca', 'Şub', 'Mar', 'Nis', 'May'],
-                values: const [5200, 8500, 12000, 15500, 14200, 11800],
-                scale: scale,
-              ),
-              child: const SizedBox.expand(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final chartSize = Size(constraints.maxWidth, 162 * scale);
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (details) {
+                    setState(() {
+                      _selectedMonthIndex = _nearestMonthlyChartPoint(
+                        details.localPosition,
+                        chartSize,
+                        scale,
+                      );
+                    });
+                  },
+                  child: CustomPaint(
+                    painter: _LineChartPainter(
+                      months: const ['Ara', 'Oca', 'Şub', 'Mar', 'Nis', 'May'],
+                      values: _monthlyProgressValues,
+                      scale: scale,
+                      selectedPointIndex: _selectedMonthIndex,
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
+    );
+  }
+
+  int? _nearestMonthlyChartPoint(Offset tapPosition, Size size, double scale) {
+    final points = _monthlyChartPoints(
+      size: size,
+      scale: scale,
+      values: _monthlyProgressValues,
+    );
+    final hitRadius = 22 * scale;
+
+    for (var i = 0; i < points.length; i++) {
+      if ((tapPosition - points[i]).distance <= hitRadius) {
+        return i;
+      }
+    }
+
+    return null;
+  }
+}
+
+Rect _monthlyChartRect(Size size, double scale) {
+  final leftPadding = 36 * scale;
+  final bottomPadding = 26 * scale;
+  final topPadding = 28 * scale;
+  final rightPadding = 4 * scale;
+
+  return Rect.fromLTRB(
+    leftPadding,
+    topPadding,
+    size.width - rightPadding,
+    size.height - bottomPadding,
+  );
+}
+
+List<Offset> _monthlyChartPoints({
+  required Size size,
+  required double scale,
+  required List<int> values,
+}) {
+  final chartRect = _monthlyChartRect(size, scale);
+
+  return [
+    for (var i = 0; i < values.length; i++)
+      Offset(
+        chartRect.left + (chartRect.width * i / math.max(1, values.length - 1)),
+        _monthlyValueToY(values[i].toDouble(), chartRect),
+      ),
+  ];
+}
+
+double _monthlyValueToY(double value, Rect rect) {
+  final normalized = (value / 20000).clamp(0.0, 1.0);
+  return rect.bottom - rect.height * normalized;
+}
+
+String _formatMonthlyValue(int value) {
+  final raw = value.toString();
+  final buffer = StringBuffer();
+
+  for (var i = 0; i < raw.length; i++) {
+    final remaining = raw.length - i;
+    buffer.write(raw[i]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+
+  return buffer.toString();
+}
+
+class _LineChartTooltipPainter {
+  const _LineChartTooltipPainter({
+    required this.scale,
+    required this.month,
+    required this.value,
+    required this.anchor,
+  });
+
+  final double scale;
+  final String month;
+  final int value;
+  final Offset anchor;
+
+  void paint(Canvas canvas, Size size) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$month  ${_formatMonthlyValue(value)}',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10.6 * scale,
+          fontWeight: FontWeight.w800,
+          height: 1,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout();
+    final horizontalPadding = 9 * scale;
+    final verticalPadding = 7 * scale;
+    final tooltipSize = Size(
+      textPainter.width + horizontalPadding * 2,
+      textPainter.height + verticalPadding * 2,
+    );
+    final tooltipLeft = (anchor.dx - tooltipSize.width / 2).clamp(
+      0.0,
+      size.width - tooltipSize.width,
+    );
+    final tooltipTop = math.max(
+      0.0,
+      anchor.dy - tooltipSize.height - 10 * scale,
+    );
+    final tooltipRect = Offset(tooltipLeft, tooltipTop) & tooltipSize;
+    final tooltipPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(tooltipRect, Radius.circular(999)));
+
+    canvas.drawShadow(
+      tooltipPath,
+      Colors.black.withValues(alpha: 0.22),
+      7 * scale,
+      true,
+    );
+    canvas.drawPath(
+      tooltipPath,
+      Paint()..color = _primaryGreen.withValues(alpha: 0.95),
+    );
+    textPainter.paint(
+      canvas,
+      tooltipRect.topLeft + Offset(horizontalPadding, verticalPadding),
+    );
+
+    final pointerPath = Path()
+      ..moveTo(anchor.dx - 5 * scale, tooltipRect.bottom - 1 * scale)
+      ..lineTo(anchor.dx + 5 * scale, tooltipRect.bottom - 1 * scale)
+      ..lineTo(anchor.dx, tooltipRect.bottom + 7 * scale)
+      ..close();
+    canvas.drawPath(
+      pointerPath,
+      Paint()..color = _primaryGreen.withValues(alpha: 0.95),
     );
   }
 }
@@ -1417,7 +2628,7 @@ class _CompactCardHeader extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: _primaryText,
-            fontSize: 13.5 * scale,
+            fontSize: 12.8 * scale,
             fontWeight: FontWeight.w800,
             height: 1.08,
           ),
@@ -1429,7 +2640,7 @@ class _CompactCardHeader extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: _secondaryText,
-            fontSize: 9.4 * scale,
+            fontSize: 8.8 * scale,
             fontWeight: FontWeight.w600,
             height: 1.16,
           ),
@@ -1587,16 +2798,166 @@ class _DonutChartPainter extends CustomPainter {
   }
 }
 
+class _YearlyMonthlyBarsPainter extends CustomPainter {
+  const _YearlyMonthlyBarsPainter({
+    required this.scale,
+    required this.values,
+    required this.selectedMonthIndex,
+  });
+
+  final double scale;
+  final List<int> values;
+  final int selectedMonthIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    final chartRect = Rect.fromLTRB(
+      0,
+      10 * scale,
+      size.width,
+      size.height - 22 * scale,
+    );
+    final maxValue = math.max(1, values.reduce(math.max));
+    final slotWidth = chartRect.width / values.length;
+    final barWidth = math.min(24 * scale, slotWidth * 0.56);
+
+    for (var i = 0; i < values.length; i++) {
+      final value = values[i];
+      final normalized = value / maxValue;
+      final height = math
+          .max(value == 0 ? 0 : 4 * scale, chartRect.height * normalized)
+          .toDouble();
+      final centerX = chartRect.left + slotWidth * i + slotWidth / 2;
+      final rect = Rect.fromLTWH(
+        centerX - barWidth / 2,
+        chartRect.bottom - height,
+        barWidth,
+        height,
+      );
+      final selected = i == selectedMonthIndex;
+      final fillPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: selected
+              ? [const Color(0xFFE7CA68), const Color(0xFFC7A44F)]
+              : [
+                  _buttonGreen.withValues(alpha: value == 0 ? 0.10 : 0.34),
+                  _buttonGreen.withValues(alpha: value == 0 ? 0.04 : 0.18),
+                ],
+        ).createShader(rect);
+
+      if (value > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(5 * scale)),
+          fillPaint,
+        );
+      }
+
+      if (selected) {
+        _drawMonthValueBubble(
+          canvas: canvas,
+          size: size,
+          centerX: centerX,
+          topY: rect.top,
+          value: value,
+        );
+      } else if (value > 0) {
+        _drawMonthValueBubble(
+          canvas: canvas,
+          size: size,
+          centerX: centerX,
+          topY: rect.top,
+          value: value,
+        );
+      }
+
+      textPainter.text = TextSpan(
+        text: _monthAbbreviations[i],
+        style: TextStyle(
+          color: selected ? _gold : _secondaryText,
+          fontSize: 8.6 * scale,
+          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+        ),
+      );
+      textPainter.layout(maxWidth: slotWidth);
+      textPainter.paint(
+        canvas,
+        Offset(centerX - textPainter.width / 2, chartRect.bottom + 8 * scale),
+      );
+    }
+  }
+
+  void _drawMonthValueBubble({
+    required Canvas canvas,
+    required Size size,
+    required double centerX,
+    required double topY,
+    required int value,
+  }) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: _formatWholeNumber(value),
+        style: TextStyle(
+          color: const Color(0xFFF7DE7A),
+          fontSize: 8.8 * scale,
+          fontWeight: FontWeight.w900,
+          height: 1,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout();
+    final bubbleSize = Size(textPainter.width + 10 * scale, 18 * scale);
+    final left = (centerX - bubbleSize.width / 2).clamp(
+      0.0,
+      size.width - bubbleSize.width,
+    );
+    final top = math.max(0.0, topY - bubbleSize.height - 6 * scale);
+    final rect = Offset(left, top) & bubbleSize;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(6 * scale)));
+
+    canvas.drawShadow(
+      path,
+      Colors.black.withValues(alpha: 0.20),
+      6 * scale,
+      true,
+    );
+    canvas.drawPath(path, Paint()..color = _primaryGreen);
+    textPainter.paint(
+      canvas,
+      Offset(
+        rect.center.dx - textPainter.width / 2,
+        rect.center.dy - textPainter.height / 2,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _YearlyMonthlyBarsPainter oldDelegate) {
+    return oldDelegate.scale != scale ||
+        oldDelegate.values != values ||
+        oldDelegate.selectedMonthIndex != selectedMonthIndex;
+  }
+}
+
 class _LineChartPainter extends CustomPainter {
   const _LineChartPainter({
     required this.months,
     required this.values,
     required this.scale,
+    this.selectedPointIndex,
   });
 
   final List<String> months;
   final List<int> values;
   final double scale;
+  final int? selectedPointIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1605,15 +2966,7 @@ class _LineChartPainter extends CustomPainter {
       textAlign: TextAlign.left,
     );
     final leftPadding = 36 * scale;
-    final bottomPadding = 26 * scale;
-    final topPadding = 8 * scale;
-    final rightPadding = 4 * scale;
-    final chartRect = Rect.fromLTRB(
-      leftPadding,
-      topPadding,
-      size.width - rightPadding,
-      size.height - bottomPadding,
-    );
+    final chartRect = _monthlyChartRect(size, scale);
 
     final gridPaint = Paint()
       ..color = _dividerColor.withValues(alpha: 0.62)
@@ -1627,7 +2980,7 @@ class _LineChartPainter extends CustomPainter {
     ];
 
     for (final (label, value) in axisLabels) {
-      final y = _valueToY(value, chartRect);
+      final y = _monthlyValueToY(value, chartRect);
       canvas.drawLine(
         Offset(chartRect.left, y),
         Offset(chartRect.right, y),
@@ -1645,13 +2998,11 @@ class _LineChartPainter extends CustomPainter {
       textPainter.paint(canvas, Offset(0, y - textPainter.height / 2));
     }
 
-    final points = <Offset>[];
-    for (var i = 0; i < values.length; i++) {
-      final x =
-          chartRect.left +
-          (chartRect.width * i / math.max(1, values.length - 1));
-      points.add(Offset(x, _valueToY(values[i].toDouble(), chartRect)));
-    }
+    final points = _monthlyChartPoints(
+      size: size,
+      scale: scale,
+      values: values,
+    );
 
     final linePath = Path()..moveTo(points.first.dx, points.first.dy);
     for (var i = 1; i < points.length; i++) {
@@ -1701,6 +3052,26 @@ class _LineChartPainter extends CustomPainter {
       canvas.drawCircle(point, 4 * scale, pointStroke);
     }
 
+    final selectedIndex = selectedPointIndex;
+    if (selectedIndex != null &&
+        selectedIndex >= 0 &&
+        selectedIndex < points.length) {
+      final selectedPoint = points[selectedIndex];
+      canvas.drawCircle(
+        selectedPoint,
+        7 * scale,
+        Paint()..color = _buttonGreen.withValues(alpha: 0.18),
+      );
+      canvas.drawCircle(selectedPoint, 4.8 * scale, pointFill);
+      canvas.drawCircle(selectedPoint, 4.8 * scale, pointStroke);
+      _LineChartTooltipPainter(
+        scale: scale,
+        month: months[selectedIndex],
+        value: values[selectedIndex],
+        anchor: selectedPoint,
+      ).paint(canvas, size);
+    }
+
     for (var i = 0; i < months.length; i++) {
       textPainter.text = TextSpan(
         text: months[i],
@@ -1719,16 +3090,12 @@ class _LineChartPainter extends CustomPainter {
     }
   }
 
-  double _valueToY(double value, Rect rect) {
-    final normalized = (value / 20000).clamp(0.0, 1.0);
-    return rect.bottom - rect.height * normalized;
-  }
-
   @override
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
     return oldDelegate.months != months ||
         oldDelegate.values != values ||
-        oldDelegate.scale != scale;
+        oldDelegate.scale != scale ||
+        oldDelegate.selectedPointIndex != selectedPointIndex;
   }
 }
 
@@ -1755,6 +3122,143 @@ class _StatisticsWashPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+class _HourlyDistributionPainter extends CustomPainter {
+  const _HourlyDistributionPainter({required this.scale});
+
+  final double scale;
+
+  static const _values = [
+    88,
+    122,
+    118,
+    101,
+    190,
+    286,
+    192,
+    520,
+    490,
+    295,
+    192,
+    144,
+    118,
+    145,
+    32,
+    58,
+    145,
+    286,
+    194,
+    532,
+    252,
+    132,
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    final leftPadding = 28 * scale;
+    final bottomPadding = 20 * scale;
+    final topPadding = 6 * scale;
+    final chartRect = Rect.fromLTRB(
+      leftPadding,
+      topPadding,
+      size.width,
+      size.height - bottomPadding,
+    );
+    final gridPaint = Paint()
+      ..color = _dividerColor.withValues(alpha: 0.62)
+      ..strokeWidth = 0.7 * scale;
+
+    for (final (label, value) in [
+      ('600', 600.0),
+      ('400', 400.0),
+      ('200', 200.0),
+      ('0', 0.0),
+    ]) {
+      final y = chartRect.bottom - chartRect.height * (value / 600);
+      canvas.drawLine(
+        Offset(chartRect.left, y),
+        Offset(chartRect.right, y),
+        gridPaint,
+      );
+      textPainter.text = TextSpan(
+        text: label,
+        style: TextStyle(
+          color: _secondaryText,
+          fontSize: 9 * scale,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+      textPainter.layout(maxWidth: leftPadding - 5 * scale);
+      textPainter.paint(canvas, Offset(0, y - textPainter.height / 2));
+    }
+
+    final gap = 6 * scale;
+    final barWidth =
+        (chartRect.width - gap * (_values.length - 1)) / _values.length;
+    final radius = Radius.circular(3 * scale);
+    for (var i = 0; i < _values.length; i++) {
+      final value = _values[i];
+      final normalized = (value / 600).clamp(0.0, 1.0);
+      final left = chartRect.left + i * (barWidth + gap);
+      final height = chartRect.height * normalized;
+      final rect = Rect.fromLTWH(
+        left,
+        chartRect.bottom - height,
+        barWidth,
+        height,
+      );
+      final highlighted = i == 7 || i == 8 || i == 19;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, radius),
+        Paint()
+          ..color = highlighted
+              ? _primaryGreen
+              : _buttonGreen.withValues(alpha: 0.44),
+      );
+    }
+
+    const labels = [
+      '00',
+      '02',
+      '04',
+      '06',
+      '08',
+      '10',
+      '12',
+      '14',
+      '16',
+      '18',
+      '20',
+      '22',
+    ];
+    for (var i = 0; i < labels.length; i++) {
+      final hourIndex = i * 2;
+      final x = chartRect.left + hourIndex * (barWidth + gap) + barWidth / 2;
+      textPainter.text = TextSpan(
+        text: labels[i],
+        style: TextStyle(
+          color: _secondaryText,
+          fontSize: 9.3 * scale,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(x - textPainter.width / 2, chartRect.bottom + 8 * scale),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HourlyDistributionPainter oldDelegate) {
+    return oldDelegate.scale != scale;
+  }
+}
+
 List<BoxShadow> _softShadow(double scale) {
   return [
     BoxShadow(
@@ -1763,6 +3267,43 @@ List<BoxShadow> _softShadow(double scale) {
       offset: Offset(0, 8 * scale),
     ),
   ];
+}
+
+const _monthAbbreviations = [
+  'Oca',
+  'Şub',
+  'Mar',
+  'Nis',
+  'May',
+  'Haz',
+  'Tem',
+  'Ağu',
+  'Eyl',
+  'Eki',
+  'Kas',
+  'Ara',
+];
+
+int _yearAdjustedInt(int value, int selectedYear) {
+  final currentYear = DateTime.now().year;
+  final yearOffset = currentYear - selectedYear;
+  final factor = (1 - yearOffset * 0.08).clamp(0.72, 1.12);
+  return math.max(0, (value * factor).round());
+}
+
+String _formatWholeNumber(int value) {
+  final raw = value.toString();
+  final buffer = StringBuffer();
+
+  for (var i = 0; i < raw.length; i++) {
+    final remaining = raw.length - i;
+    buffer.write(raw[i]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+
+  return buffer.toString();
 }
 
 class _MetricData {
@@ -1777,6 +3318,34 @@ class _MetricData {
   final String value;
   final String label;
   final Color color;
+}
+
+String _formatDailyDate(DateTime date) {
+  const months = [
+    'Ocak',
+    'Şubat',
+    'Mart',
+    'Nisan',
+    'Mayıs',
+    'Haziran',
+    'Temmuz',
+    'Ağustos',
+    'Eylül',
+    'Ekim',
+    'Kasım',
+    'Aralık',
+  ];
+
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
+}
+
+class _DailyDhikrRank {
+  const _DailyDhikrRank(this.rank, this.label, this.value, this.progress);
+
+  final int rank;
+  final String label;
+  final int value;
+  final double progress;
 }
 
 class _DistributionItem {

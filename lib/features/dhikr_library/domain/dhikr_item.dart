@@ -6,6 +6,7 @@ class DhikrItem {
     required this.defaultTarget,
     this.arabicText,
     this.meaning,
+    this.longMeaning,
     this.isFavorite = false,
     this.isBuiltIn = true,
   });
@@ -16,6 +17,7 @@ class DhikrItem {
   final int defaultTarget;
   final String? arabicText;
   final String? meaning;
+  final String? longMeaning;
   final bool isFavorite;
   final bool isBuiltIn;
 
@@ -27,6 +29,7 @@ class DhikrItem {
       defaultTarget: defaultTarget ?? this.defaultTarget,
       arabicText: arabicText,
       meaning: meaning,
+      longMeaning: longMeaning,
       isFavorite: isFavorite ?? this.isFavorite,
       isBuiltIn: isBuiltIn,
     );

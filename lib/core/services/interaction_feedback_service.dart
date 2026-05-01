@@ -6,13 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/settings/application/settings_controller.dart';
 
 class InteractionFeedbackService {
-  const InteractionFeedbackService(this._readSettings);
+  InteractionFeedbackService(this._readSettings);
 
   static const _nativeFeedbackChannel = MethodChannel(
     'pro.zikirmatik.app/feedback',
   );
+  static const _tesbihTickCooldown = Duration(milliseconds: 25);
 
   final SettingsState Function() _readSettings;
+  DateTime? _lastTesbihTickAt;
 
   void selection() {
     _run(haptic: HapticFeedback.selectionClick);
@@ -33,6 +35,23 @@ class InteractionFeedbackService {
       haptic: () => _nativeVibrate(
         durationMs: 36,
         amplitude: 205,
+        fallback: HapticFeedback.mediumImpact,
+      ),
+    );
+  }
+
+  void tesbihTick() {
+    final now = DateTime.now();
+    final lastTick = _lastTesbihTickAt;
+    if (lastTick != null && now.difference(lastTick) < _tesbihTickCooldown) {
+      return;
+    }
+
+    _lastTesbihTickAt = now;
+    _run(
+      haptic: () => _nativeVibrate(
+        durationMs: 34,
+        amplitude: 230,
         fallback: HapticFeedback.mediumImpact,
       ),
     );

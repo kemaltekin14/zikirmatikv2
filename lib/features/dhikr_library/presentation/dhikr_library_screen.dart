@@ -1957,6 +1957,8 @@ IconData _categoryIcon(String category) {
       return Icons.auto_awesome_rounded;
     case 'tesbih':
       return Icons.spa_rounded;
+    case 'esma-ul husna':
+      return Icons.auto_awesome_rounded;
     default:
       return Icons.bookmark_rounded;
   }

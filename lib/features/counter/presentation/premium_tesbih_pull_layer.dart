@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui' show PathMetric;
+import 'dart:ui' show PathMetric, Tangent;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
@@ -27,23 +27,69 @@ const List<Offset> tesbihPathPoints = [
 
 enum PremiumTesbihPullLayerPass { underRingSegments, overRingStrand }
 
+class PremiumTesbihBeadSnapshot {
+  const PremiumTesbihBeadSnapshot({
+    required this.index,
+    required this.progress,
+    required this.position,
+    required this.tangentVector,
+    required this.receiveGapIndex,
+    required this.receiveGapProgress,
+  });
+
+  final int index;
+  final double progress;
+  final Offset position;
+  final Offset tangentVector;
+  final int? receiveGapIndex;
+  final double? receiveGapProgress;
+}
+
+PremiumTesbihBeadSnapshot? nearestPremiumTesbihBeadSnapshot({
+  required Size size,
+  required Offset position,
+  required double beadShift,
+  double revealProgress = 1,
+}) {
+  return _PremiumTesbihPullPainter(
+    scale: 1,
+    beadShift: beadShift,
+    lowerBeadShift: beadShift,
+    pullFraction: 0,
+    enabled: true,
+    pass: PremiumTesbihPullLayerPass.overRingStrand,
+    revealProgress: revealProgress,
+    activeBeadIndex: null,
+    activeBeadProgress: null,
+    suppressedBeadIndex: null,
+  ).nearestVisibleBeadSnapshot(position, size);
+}
+
 class PremiumTesbihPullLayer extends StatelessWidget {
   const PremiumTesbihPullLayer({
     super.key,
     required this.scale,
     required this.beadShift,
+    this.lowerBeadShift,
     required this.pullFraction,
     required this.enabled,
     required this.pass,
     this.revealProgress = 1,
+    this.activeBeadIndex,
+    this.activeBeadProgress,
+    this.suppressedBeadIndex,
   });
 
   final double scale;
   final double beadShift;
+  final double? lowerBeadShift;
   final double pullFraction;
   final bool enabled;
   final PremiumTesbihPullLayerPass pass;
   final double revealProgress;
+  final int? activeBeadIndex;
+  final double? activeBeadProgress;
+  final int? suppressedBeadIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -51,10 +97,14 @@ class PremiumTesbihPullLayer extends StatelessWidget {
       painter: _PremiumTesbihPullPainter(
         scale: scale,
         beadShift: beadShift,
+        lowerBeadShift: lowerBeadShift ?? beadShift,
         pullFraction: pullFraction,
         enabled: enabled,
         pass: pass,
         revealProgress: revealProgress,
+        activeBeadIndex: activeBeadIndex,
+        activeBeadProgress: activeBeadProgress,
+        suppressedBeadIndex: suppressedBeadIndex,
       ),
     );
   }
@@ -64,10 +114,14 @@ class _PremiumTesbihPullPainter extends CustomPainter {
   const _PremiumTesbihPullPainter({
     required this.scale,
     required this.beadShift,
+    required this.lowerBeadShift,
     required this.pullFraction,
     required this.enabled,
     required this.pass,
     required this.revealProgress,
+    required this.activeBeadIndex,
+    required this.activeBeadProgress,
+    required this.suppressedBeadIndex,
   });
 
   static const _beadSlotCount = 22;
@@ -79,10 +133,11 @@ class _PremiumTesbihPullPainter extends CustomPainter {
   static const _beadMinHeight = 25.92;
   static const _beadMaxHeight = 36.0;
   static const _showDebugPath = false;
-  static const _livePullBeadShiftSlots = 0.22;
   static const _startUnderRange = _PathProgressRange(0.0, 0.12);
   static const _finalUnderRange = _PathProgressRange(0.86, 1.0);
   static const _hiddenGapRange = _PathProgressRange(0.36, 0.515);
+  static const _upperFrontPullRange = _PathProgressRange(0.245, 0.36);
+  static const _receiveGapRange = _PathProgressRange(0.515, 0.64);
   static const _tailControlPoint = Offset(0.69, 0.845);
   static const _tailEndPoint = Offset(0.705, 0.805);
   static const _beadSettleSpring = SpringDescription(
@@ -98,10 +153,14 @@ class _PremiumTesbihPullPainter extends CustomPainter {
 
   final double scale;
   final double beadShift;
+  final double lowerBeadShift;
   final double pullFraction;
   final bool enabled;
   final PremiumTesbihPullLayerPass pass;
   final double revealProgress;
+  final int? activeBeadIndex;
+  final double? activeBeadProgress;
+  final int? suppressedBeadIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -120,15 +179,6 @@ class _PremiumTesbihPullPainter extends CustomPainter {
 
     final spacing = metric.length * _beadSpacing;
     final beadSize = _beadSize(size);
-    final activePullIndex = pullFraction > 0.001
-        ? _closestBeadIndexToProgress(_hiddenGapRange.start)
-        : null;
-    final activePullStartProgress = activePullIndex == null
-        ? null
-        : _stableBeadProgress(activePullIndex);
-    final activePullProgress = activePullStartProgress == null
-        ? null
-        : _activePullProgress(activePullStartProgress);
 
     if (pass == PremiumTesbihPullLayerPass.underRingSegments) {
       final startCord = _extractRevealedPath(
@@ -170,83 +220,239 @@ class _PremiumTesbihPullPainter extends CustomPainter {
     }
 
     for (var index = 0; index < _beadSlotCount; index++) {
-      if (index == activePullIndex) {
+      if (index == activeBeadIndex || index == suppressedBeadIndex) {
         continue;
       }
 
-      final distance = _wrapDistance(
-        (index * spacing) + beadShift * spacing,
-        metric.length,
-      );
-      final progress = distance / metric.length;
-      final isUnderRingBead =
-          _startUnderRange.contains(progress) ||
-          _finalUnderRange.contains(progress);
-      final shouldPaintForPass =
-          pass == PremiumTesbihPullLayerPass.underRingSegments
-          ? isUnderRingBead
-          : !isUnderRingBead;
+      final bead = _beadSampleForIndex(metric, index, spacing, reveal);
+      if (bead == null) continue;
 
-      if (!shouldPaintForPass) {
+      if (!_shouldPaintBeadForPass(bead.progress)) {
         continue;
       }
 
-      if (_hiddenGapRange.contains(progress)) {
+      if (_hiddenGapRange.contains(bead.progress)) {
         continue;
       }
 
-      final beadPhase = _beadPhaseFor(progress, reveal);
-      if (beadPhase <= 0) {
-        continue;
-      }
-      final beadReveal = _beadRevealFor(beadPhase);
-
-      final beadDistance =
-          metric.length * _slidingBeadProgress(progress, beadPhase, beadReveal);
-      final tangent = metric.getTangentForOffset(beadDistance);
-      if (tangent == null) continue;
-
-      final pullGlow = index == 0
+      final pullGlow = activeBeadIndex == null && index == 0
           ? (0.18 + pullFraction * 0.52).clamp(0.0, 0.70)
           : 0.0;
 
       _drawEmeraldBead(
         canvas,
-        tangent.position,
+        bead.tangent.position,
         beadSize,
         opacity,
         glow: pullGlow,
-        appearProgress: beadReveal,
-        visibilityProgress: _beadVisibilityFor(beadPhase),
-        tangentVector: tangent.vector,
+        appearProgress: bead.reveal,
+        visibilityProgress: bead.visibility,
+        tangentVector: bead.tangent.vector,
       );
     }
 
     if (pass == PremiumTesbihPullLayerPass.overRingStrand &&
-        activePullProgress != null) {
-      final activeBeadPhase = _beadPhaseFor(activePullProgress, reveal);
-      final activeBeadReveal = _beadRevealFor(activeBeadPhase);
-      final activeBeadDistance =
-          metric.length *
-          _slidingBeadProgress(
-            activePullProgress,
-            activeBeadPhase,
-            activeBeadReveal,
-          );
-      final activeTangent = metric.getTangentForOffset(activeBeadDistance);
-      if (activeTangent != null) {
+        activeBeadIndex != null &&
+        activeBeadProgress != null) {
+      final activePulledOpacity = 1.0 - _smoothStep(0.78, 0.94, pullFraction);
+      if (pullFraction >= 0.94 || activePulledOpacity <= 0) {
+        return;
+      }
+
+      final activeBead = _beadSampleForProgress(
+        metric,
+        activeBeadProgress!,
+        reveal,
+      );
+      if (activeBead != null) {
         _drawEmeraldBead(
           canvas,
-          activeTangent.position,
+          activeBead.tangent.position,
           beadSize,
-          opacity,
-          glow: (0.24 + pullFraction * 0.34).clamp(0.0, 0.58).toDouble(),
-          appearProgress: activeBeadReveal,
-          visibilityProgress: _beadVisibilityFor(activeBeadPhase),
-          tangentVector: activeTangent.vector,
+          opacity * activePulledOpacity,
+          glow: (0.18 + pullFraction * 0.52).clamp(0.0, 0.70),
+          appearProgress: activeBead.reveal,
+          visibilityProgress: activeBead.visibility,
+          tangentVector: activeBead.tangent.vector,
         );
       }
     }
+  }
+
+  PremiumTesbihBeadSnapshot? nearestVisibleBeadSnapshot(
+    Offset position,
+    Size size,
+  ) {
+    if (size.isEmpty) return null;
+
+    final path = _buildPath(size);
+    final metrics = path.computeMetrics().toList(growable: false);
+    if (metrics.isEmpty) return null;
+
+    final metric = metrics.first;
+    final spacing = metric.length * _beadSpacing;
+    final reveal = revealProgress.clamp(0.0, 1.0).toDouble();
+    _TesbihBeadSample? turnBead;
+    _TesbihBeadSample? fallbackTurnBead;
+    var turnBeadIndex = -1;
+    var fallbackTurnBeadIndex = -1;
+    var turnDistanceToGate = double.infinity;
+    var fallbackDistanceToGate = double.infinity;
+    var turnTouchDistance = double.infinity;
+    var receiveGapIndex = -1;
+    double? receiveGapProgress;
+    var receiveGapDistance = double.infinity;
+    final maxHitDistance = (size.shortestSide * 0.56)
+        .clamp(148.0, 220.0)
+        .toDouble();
+
+    for (var index = 0; index < _beadSlotCount; index++) {
+      final bead = _beadSampleForIndex(metric, index, spacing, reveal);
+      if (bead == null || _hiddenGapRange.contains(bead.progress)) {
+        continue;
+      }
+
+      if (_upperFrontPullRange.contains(bead.progress)) {
+        final gateDistance = (_hiddenGapRange.start - bead.progress).abs();
+        if (gateDistance < turnDistanceToGate) {
+          turnDistanceToGate = gateDistance;
+          turnBeadIndex = index;
+          turnBead = bead;
+          turnTouchDistance = (bead.tangent.position - position).distance;
+        }
+      }
+
+      if (bead.progress >= _startUnderRange.end &&
+          bead.progress < _hiddenGapRange.start) {
+        final gateDistance = (_hiddenGapRange.start - bead.progress).abs();
+        if (gateDistance < fallbackDistanceToGate) {
+          fallbackDistanceToGate = gateDistance;
+          fallbackTurnBeadIndex = index;
+          fallbackTurnBead = bead;
+        }
+      }
+
+      if (_receiveGapRange.contains(bead.progress)) {
+        final receiveDistance = (bead.progress - _hiddenGapRange.end).abs();
+        if (receiveDistance < receiveGapDistance) {
+          receiveGapDistance = receiveDistance;
+          receiveGapIndex = index;
+          receiveGapProgress = bead.progress;
+        }
+      }
+    }
+
+    if (turnBead == null) {
+      turnBead = fallbackTurnBead;
+      turnBeadIndex = fallbackTurnBeadIndex;
+      if (turnBead != null) {
+        turnTouchDistance = (turnBead.tangent.position - position).distance;
+      }
+    }
+
+    if (turnBead == null) {
+      return null;
+    }
+
+    final normalizedX = position.dx / size.width;
+    final normalizedY = position.dy / size.height;
+    final inPullCorridor =
+        normalizedX >= 0.28 &&
+        normalizedX <= 1.24 &&
+        normalizedY >= 0.0 &&
+        normalizedY <= 1.14;
+    if (turnTouchDistance > maxHitDistance && !inPullCorridor) {
+      return null;
+    }
+
+    return PremiumTesbihBeadSnapshot(
+      index: turnBeadIndex,
+      progress: turnBead.progress,
+      position: turnBead.tangent.position,
+      tangentVector: turnBead.tangent.vector,
+      receiveGapIndex: receiveGapIndex >= 0 ? receiveGapIndex : null,
+      receiveGapProgress: receiveGapProgress,
+    );
+  }
+
+  _TesbihBeadSample? _beadSampleForIndex(
+    PathMetric metric,
+    int index,
+    double spacing,
+    double reveal,
+  ) {
+    if (index < 0 || index >= _beadSlotCount) return null;
+
+    final baseDistance = _wrapDistance(
+      (index * spacing) + beadShift * spacing,
+      metric.length,
+    );
+    final baseProgress = baseDistance / metric.length;
+    final distance = _isLowerStrandProgress(baseProgress)
+        ? _wrapDistance(
+            (index * spacing) + lowerBeadShift * spacing,
+            metric.length,
+          )
+        : baseDistance;
+    final progress = distance / metric.length;
+
+    final beadPhase = _beadPhaseFor(progress, reveal);
+    if (beadPhase <= 0) return null;
+
+    final beadReveal = _beadRevealFor(beadPhase);
+    final beadDistance =
+        metric.length * _slidingBeadProgress(progress, beadPhase, beadReveal);
+    final tangent = metric.getTangentForOffset(beadDistance);
+    if (tangent == null) return null;
+
+    return _TesbihBeadSample(
+      progress: progress,
+      reveal: beadReveal,
+      visibility: _beadVisibilityFor(beadPhase),
+      tangent: tangent,
+    );
+  }
+
+  _TesbihBeadSample? _beadSampleForProgress(
+    PathMetric metric,
+    double progress,
+    double reveal,
+  ) {
+    final clampedProgress = progress.clamp(0.0, 1.0).toDouble();
+    final beadPhase = _beadPhaseFor(clampedProgress, reveal);
+    if (beadPhase <= 0) return null;
+
+    final beadReveal = _beadRevealFor(beadPhase);
+    final beadDistance =
+        metric.length *
+        _slidingBeadProgress(clampedProgress, beadPhase, beadReveal);
+    final tangent = metric.getTangentForOffset(beadDistance);
+    if (tangent == null) return null;
+
+    return _TesbihBeadSample(
+      progress: clampedProgress,
+      reveal: beadReveal,
+      visibility: _beadVisibilityFor(beadPhase),
+      tangent: tangent,
+    );
+  }
+
+  bool _isLowerStrandProgress(double progress) {
+    return progress >= _hiddenGapRange.end && progress <= _finalUnderRange.end;
+  }
+
+  double _smoothStep(double start, double end, double value) {
+    final t = ((value - start) / (end - start)).clamp(0.0, 1.0).toDouble();
+    return t * t * (3 - 2 * t);
+  }
+
+  bool _shouldPaintBeadForPass(double progress) {
+    final isUnderRingBead =
+        _startUnderRange.contains(progress) ||
+        _finalUnderRange.contains(progress);
+    return pass == PremiumTesbihPullLayerPass.underRingSegments
+        ? isUnderRingBead
+        : !isUnderRingBead;
   }
 
   Path? _extractRevealedPath(
@@ -314,34 +520,6 @@ class _PremiumTesbihPullPainter extends CustomPainter {
           .clamp(_beadMinHeight, _beadMaxHeight)
           .toDouble(),
     );
-  }
-
-  double _activePullProgress(double startProgress) {
-    final easedPull = Curves.easeInOutCubic.transform(
-      pullFraction.clamp(0.0, 1.0).toDouble(),
-    );
-    final travel = _forwardProgressDelta(startProgress, _hiddenGapRange.end);
-    return _wrapProgress(startProgress + travel * easedPull);
-  }
-
-  int _closestBeadIndexToProgress(double targetProgress) {
-    var closestIndex = 0;
-    var closestScore = double.infinity;
-    for (var index = 0; index < _beadSlotCount; index++) {
-      final progress = _stableBeadProgress(index);
-      final score = _progressDelta(progress, targetProgress);
-      if (score < closestScore) {
-        closestScore = score;
-        closestIndex = index;
-      }
-    }
-
-    return closestIndex;
-  }
-
-  double _stableBeadProgress(int index) {
-    final stableBeadShift = beadShift - pullFraction * _livePullBeadShiftSlots;
-    return _wrapProgress((index + stableBeadShift) * _beadSpacing);
   }
 
   void _drawCord(
@@ -566,29 +744,18 @@ class _PremiumTesbihPullPainter extends CustomPainter {
         .toDouble();
   }
 
-  double _wrapProgress(double progress) {
-    final wrapped = progress % 1.0;
-    return wrapped < 0 ? wrapped + 1.0 : wrapped;
-  }
-
-  double _progressDelta(double a, double b) {
-    final raw = (a - b).abs();
-    return math.min(raw, 1.0 - raw);
-  }
-
-  double _forwardProgressDelta(double start, double end) {
-    final delta = end - start;
-    return delta < 0 ? delta + 1.0 : delta;
-  }
-
   @override
   bool shouldRepaint(covariant _PremiumTesbihPullPainter oldDelegate) {
     return oldDelegate.scale != scale ||
         oldDelegate.beadShift != beadShift ||
+        oldDelegate.lowerBeadShift != lowerBeadShift ||
         oldDelegate.pullFraction != pullFraction ||
         oldDelegate.enabled != enabled ||
         oldDelegate.pass != pass ||
-        oldDelegate.revealProgress != revealProgress;
+        oldDelegate.revealProgress != revealProgress ||
+        oldDelegate.activeBeadIndex != activeBeadIndex ||
+        oldDelegate.activeBeadProgress != activeBeadProgress ||
+        oldDelegate.suppressedBeadIndex != suppressedBeadIndex;
   }
 }
 
@@ -604,4 +771,18 @@ class _PathProgressRange {
     }
     return progress >= start || progress <= end;
   }
+}
+
+class _TesbihBeadSample {
+  const _TesbihBeadSample({
+    required this.progress,
+    required this.reveal,
+    required this.visibility,
+    required this.tangent,
+  });
+
+  final double progress;
+  final double reveal;
+  final double visibility;
+  final Tangent tangent;
 }

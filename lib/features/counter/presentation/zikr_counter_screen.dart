@@ -231,7 +231,13 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                   offset: Offset(0, -titleVisualLift),
                                   child: _TappableZikrTitle(
                                     onTap: _openDhikrLibrary,
-                                    child: _ZikrTitleSection(scale: scale),
+                                    child: _ZikrTitleSection(
+                                      scale: scale,
+                                      name: counter.activeDhikr.name,
+                                      arabicText:
+                                          counter.activeDhikr.arabicText,
+                                      meaning: counter.activeDhikr.meaning,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -414,7 +420,9 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
   }
 
   void _incrementCounter() {
-    ref.read(counterControllerProvider.notifier).increment();
+    ref
+        .read(counterControllerProvider.notifier)
+        .increment(useTesbihFeedback: _tesbihModeEnabled);
   }
 
   void _playBeadCollisionSound() {
@@ -532,14 +540,24 @@ class _TappableZikrTitle extends StatelessWidget {
 }
 
 class _ZikrTitleSection extends StatelessWidget {
-  const _ZikrTitleSection({required this.scale});
+  const _ZikrTitleSection({
+    required this.scale,
+    required this.name,
+    this.arabicText,
+    this.meaning,
+  });
 
   final double scale;
+  final String name;
+  final String? arabicText;
+  final String? meaning;
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final titleWidth = math.min(screenWidth - 48 * scale, 336 * scale);
+    final displayArabic = arabicText?.trim();
+    final displayMeaning = meaning?.trim();
     final arabicFontSize = _responsiveFontSize(
       screenWidth,
       factor: 0.086,
@@ -571,30 +589,31 @@ class _ZikrTitleSection extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'سُبْحَانَ الله',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                  color: _arabicTitleColor,
-                  fontFamily: 'Amiri',
-                  fontSize: arabicFontSize,
-                  fontWeight: FontWeight.w700,
-                  height: 1.04,
-                  shadows: [
-                    Shadow(
-                      color: _mutedGold.withValues(alpha: 0.20),
-                      blurRadius: 4 * scale,
-                      offset: Offset(0, 1 * scale),
-                    ),
-                  ],
+              if (displayArabic != null && displayArabic.isNotEmpty)
+                Text(
+                  displayArabic,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(
+                    color: _arabicTitleColor,
+                    fontFamily: 'Amiri',
+                    fontSize: arabicFontSize,
+                    fontWeight: FontWeight.w700,
+                    height: 1.04,
+                    shadows: [
+                      Shadow(
+                        color: _mutedGold.withValues(alpha: 0.20),
+                        blurRadius: 4 * scale,
+                        offset: Offset(0, 1 * scale),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               SizedBox(height: 4 * gapScale),
               _PremiumShimmerText(
-                'Sübhânallah',
+                name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -618,7 +637,9 @@ class _ZikrTitleSection extends StatelessWidget {
               _TitleDivider(scale: scale),
               SizedBox(height: 6 * gapScale),
               Text(
-                'Allah her türlü eksiklikten uzaktır.',
+                displayMeaning == null || displayMeaning.isEmpty
+                    ? ''
+                    : displayMeaning,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -1320,6 +1341,9 @@ class _PressableCounterDial extends StatefulWidget {
 
 class _PressableCounterDialState extends State<_PressableCounterDial>
     with TickerProviderStateMixin {
+  static const _tesbihBeadSlotProgress = 1 / 22;
+  static const _pullHiddenGapStart = 0.36;
+  static const _pullHiddenGapEnd = 0.515;
   static const _livePullBeadShiftSlots = 0.17;
 
   static const _pressSpring = SpringDescription(
@@ -1333,15 +1357,24 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   late final AnimationController _beadSlideController;
   late final AnimationController _tesbihModeController;
   late final AnimationController _pullHintController;
+  late final AnimationController _pullReturnController;
   final _counterDialKey = GlobalKey();
   var _beadShiftStart = 0.0;
   var _beadShiftEnd = 0.0;
   var _dragPullDistance = 0.0;
+  var _pullReturnStartFraction = 0.0;
   var _isDraggingTesbih = false;
   var _pullCompletedForGesture = false;
   var _pullHintIntroReady = false;
   var _showPullHint = false;
   var _pullHintCompletedPulls = 0;
+  var _beadSettleGeneration = 0;
+  int? _activePulledBeadIndex;
+  double? _activeBeadStartProgress;
+  double? _activeBeadEndProgress;
+  PremiumTesbihBeadSnapshot? _pendingTesbihActiveBead;
+  int? _tesbihPointer;
+  Offset? _lastTesbihPointerPosition;
   Timer? _pullHintIntroTimer;
   Timer? _pullHintTimer;
   double? _pendingBeadSettleStart;
@@ -1363,7 +1396,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _beadShiftEnd = widget.count.toDouble();
     _beadSlideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 310),
+      duration: const Duration(milliseconds: 460),
       value: 1,
     );
     _tesbihModeController = AnimationController(
@@ -1375,22 +1408,51 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       vsync: this,
       duration: const Duration(milliseconds: 820),
     )..repeat(reverse: true);
+    _pullReturnController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 210),
+      value: 1,
+    );
   }
 
   @override
   void didUpdateWidget(covariant _PressableCounterDial oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.count != widget.count) {
+      final settleGeneration = ++_beadSettleGeneration;
       _beadShiftStart = _pendingBeadSettleStart ?? oldWidget.count.toDouble();
       _pendingBeadSettleStart = null;
       _beadShiftEnd = widget.count.toDouble();
-      _beadSlideController.forward(from: 0);
+      _beadSlideController.forward(from: 0).whenComplete(() {
+        if (!mounted || settleGeneration != _beadSettleGeneration) return;
+        setState(() {
+          _dragPullDistance = 0;
+          _pullReturnStartFraction = 0;
+          _isDraggingTesbih = false;
+          _pullCompletedForGesture = false;
+          _activePulledBeadIndex = null;
+          _activeBeadStartProgress = null;
+          _activeBeadEndProgress = null;
+          _pendingTesbihActiveBead = null;
+          _tesbihPointer = null;
+          _lastTesbihPointerPosition = null;
+        });
+      });
       _countPopController.forward(from: 0);
     }
     if (oldWidget.tesbihModeEnabled != widget.tesbihModeEnabled) {
+      _beadSettleGeneration++;
       _dragPullDistance = 0;
+      _pullReturnStartFraction = 0;
       _isDraggingTesbih = false;
       _pullCompletedForGesture = false;
+      _activePulledBeadIndex = null;
+      _activeBeadStartProgress = null;
+      _activeBeadEndProgress = null;
+      _pendingTesbihActiveBead = null;
+      _tesbihPointer = null;
+      _lastTesbihPointerPosition = null;
+      _pullReturnController.value = 1;
       if (widget.tesbihModeEnabled) {
         _resetPullHint();
         _tesbihModeController.forward();
@@ -1415,6 +1477,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _countPopController.dispose();
     _beadSlideController.dispose();
     _tesbihModeController.dispose();
+    _pullReturnController.dispose();
     _pullHintIntroTimer?.cancel();
     _pullHintTimer?.cancel();
     _pullHintController.dispose();
@@ -1423,321 +1486,340 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      key: const Key('counter.increment'),
+    return Listener(
       behavior: HitTestBehavior.translucent,
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
-      onTap: _handleTap,
-      onPanStart: _handlePanStart,
-      onPanUpdate: _handlePanUpdate,
-      onPanEnd: _handlePanEnd,
-      onPanCancel: _handlePanCancel,
-      child: SizedBox(
-        width: widget.areaWidth,
-        height: widget.areaHeight,
-        child: Center(
-          child: OverflowBox(
-            maxWidth: widget.counterSize,
-            maxHeight: widget.counterSize,
-            child: Transform.translate(
-              offset: Offset(0, -widget.counterVisualLift),
-              child: RepaintBoundary(
-                child: SizedBox.square(
-                  key: _counterDialKey,
-                  dimension: widget.counterSize,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      AnimatedBuilder(
-                        animation: _pressController,
-                        builder: (context, _) {
-                          final pressState = _currentPressState;
-                          final easedPress = pressState.easedPress;
-                          final innerTravel = (4.2 * widget.scale)
-                              .clamp(3.2, 5.1)
-                              .toDouble();
-                          final reboundLift = (1.0 * widget.scale)
-                              .clamp(0.7, 1.3)
-                              .toDouble();
-                          final innerOffset =
-                              easedPress * innerTravel -
-                              pressState.rebound * reboundLift;
-                          final innerScale =
-                              1 -
-                              easedPress * 0.010 +
-                              pressState.rebound * 0.004;
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerCancel,
+      child: GestureDetector(
+        key: const Key('counter.increment'),
+        behavior: HitTestBehavior.translucent,
+        onTapDown: _handleTapDown,
+        onTapUp: _handleTapUp,
+        onTapCancel: _handleTapCancel,
+        onTap: _handleTap,
+        onPanStart: _handlePanStart,
+        onPanUpdate: _handlePanUpdate,
+        onPanEnd: _handlePanEnd,
+        onPanCancel: _handlePanCancel,
+        child: SizedBox(
+          width: widget.areaWidth,
+          height: widget.areaHeight,
+          child: Center(
+            child: OverflowBox(
+              maxWidth: widget.counterSize,
+              maxHeight: widget.counterSize,
+              child: Transform.translate(
+                offset: Offset(0, -widget.counterVisualLift),
+                child: RepaintBoundary(
+                  child: SizedBox.square(
+                    key: _counterDialKey,
+                    dimension: widget.counterSize,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        AnimatedBuilder(
+                          animation: _pressController,
+                          builder: (context, _) {
+                            final pressState = _currentPressState;
+                            final easedPress = pressState.easedPress;
+                            final innerTravel = (4.2 * widget.scale)
+                                .clamp(3.2, 5.1)
+                                .toDouble();
+                            final reboundLift = (1.0 * widget.scale)
+                                .clamp(0.7, 1.3)
+                                .toDouble();
+                            final innerOffset =
+                                easedPress * innerTravel -
+                                pressState.rebound * reboundLift;
+                            final innerScale =
+                                1 -
+                                easedPress * 0.010 +
+                                pressState.rebound * 0.004;
 
-                          return Transform.translate(
-                            offset: Offset(0, innerOffset),
-                            child: Transform.scale(
-                              scale: innerScale,
-                              child: Container(
-                                width: widget.interiorSize,
-                                height: widget.interiorSize,
-                                decoration: BoxDecoration(
-                                  color: Color.lerp(
-                                    _counterInterior,
-                                    const Color(0xFFE0D0B2),
-                                    easedPress * 0.88,
-                                  )!,
-                                  shape: BoxShape.circle,
+                            return Transform.translate(
+                              offset: Offset(0, innerOffset),
+                              child: Transform.scale(
+                                scale: innerScale,
+                                child: Container(
+                                  width: widget.interiorSize,
+                                  height: widget.interiorSize,
+                                  decoration: BoxDecoration(
+                                    color: Color.lerp(
+                                      _counterInterior,
+                                      const Color(0xFFE0D0B2),
+                                      easedPress * 0.88,
+                                    )!,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                      Positioned(
-                        right: widget.tesbihRight,
-                        top: widget.tesbihTop,
-                        width: widget.tesbihWidth,
-                        height: widget.tesbihHeight,
-                        child: IgnorePointer(
-                          child: AnimatedBuilder(
-                            animation: _tesbihModeController,
-                            builder: (context, child) {
-                              return _StaticTesbihAssetReveal(
-                                fadeOutProgress: _tesbihModeController.value,
-                                tesbihModeEnabled: widget.tesbihModeEnabled,
-                                child: child!,
-                              );
-                            },
-                            child: Image.asset(
-                              _tesbihAsset,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
+                            );
+                          },
                         ),
-                      ),
-                      if (widget.tesbihModeEnabled)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: AnimatedBuilder(
-                              animation: Listenable.merge([
-                                _beadSlideController,
-                                _tesbihModeController,
-                              ]),
-                              builder: (context, _) {
-                                final revealProgress = _tesbihModeController
-                                    .value
-                                    .clamp(0.0, 1.0)
-                                    .toDouble();
-                                return PremiumTesbihPullLayer(
-                                  scale: widget.scale,
-                                  beadShift: _currentBeadShift,
-                                  pullFraction: _pullFraction,
-                                  enabled: true,
-                                  revealProgress: revealProgress,
-                                  pass: PremiumTesbihPullLayerPass
-                                      .underRingSegments,
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      SizedBox.square(
-                        dimension: widget.ringSize,
-                        child: Image.asset(
-                          _counterRingAsset,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      if (widget.tesbihModeEnabled)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: AnimatedBuilder(
-                              animation: Listenable.merge([
-                                _beadSlideController,
-                                _tesbihModeController,
-                              ]),
-                              builder: (context, _) {
-                                final revealProgress = _tesbihModeController
-                                    .value
-                                    .clamp(0.0, 1.0)
-                                    .toDouble();
-                                return PremiumTesbihPullLayer(
-                                  scale: widget.scale,
-                                  beadShift: _currentBeadShift,
-                                  pullFraction: _pullFraction,
-                                  enabled: true,
-                                  revealProgress: revealProgress,
-                                  pass:
-                                      PremiumTesbihPullLayerPass.overRingStrand,
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      AnimatedBuilder(
-                        animation: _pressController,
-                        builder: (context, child) {
-                          final pressState = _currentPressState;
-                          final numberTravel = (2.7 * widget.scale)
-                              .clamp(2.0, 3.4)
-                              .toDouble();
-                          final numberLift = (0.9 * widget.scale)
-                              .clamp(0.6, 1.2)
-                              .toDouble();
-                          final numberOffset =
-                              -widget.ringSize * 0.025 +
-                              pressState.easedPress * numberTravel -
-                              pressState.rebound * numberLift;
-                          final numberScale =
-                              1 -
-                              pressState.easedPress * 0.012 +
-                              pressState.rebound * 0.005;
-
-                          return Transform.translate(
-                            offset: Offset(0, numberOffset),
-                            child: Transform.scale(
-                              scale: numberScale,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: SizedBox(
-                          width: widget.counterNumberWidth,
-                          height: (widget.ringSize * 0.23)
-                              .clamp(66, 92)
-                              .toDouble(),
-                          child: AnimatedBuilder(
-                            animation: _countPopController,
-                            builder: (context, child) {
-                              final progress = _countPopController.value
-                                  .clamp(0.0, 1.0)
-                                  .toDouble();
-                              final pop = Curves.easeOutBack
-                                  .transform(progress)
-                                  .clamp(0.0, 1.12)
-                                  .toDouble();
-                              final settle = Curves.easeOutCubic.transform(
-                                progress,
-                              );
-                              final scale = 0.92 + pop * 0.08;
-                              final lift =
-                                  (1 - settle) * widget.ringSize * 0.014;
-
-                              return Transform.translate(
-                                offset: Offset(0, lift),
-                                child: Transform.scale(
-                                  scale: scale,
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '${widget.count}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: _primaryGreen,
-                                  fontSize: 90 * widget.scale,
-                                  fontWeight: FontWeight.w900,
-                                  height: 0.9,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      AnimatedBuilder(
-                        animation: _pressController,
-                        builder: (context, child) {
-                          final pressState = _currentPressState;
-                          final pillTravel = (2.2 * widget.scale)
-                              .clamp(1.6, 2.8)
-                              .toDouble();
-                          final pillLift = (0.7 * widget.scale)
-                              .clamp(0.5, 1.0)
-                              .toDouble();
-
-                          return Positioned(
-                            top:
-                                widget.targetPillTop +
-                                pressState.easedPress * pillTravel -
-                                pressState.rebound * pillLift,
-                            left: 0,
-                            right: 0,
-                            child: child!,
-                          );
-                        },
-                        child: Center(
-                          child: Container(
-                            width: widget.targetPillWidth,
-                            height: widget.targetPillHeight,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: _counterTargetPillSurface.withValues(
-                                alpha: 0.82,
-                              ),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: _mutedGold.withValues(alpha: 0.30),
-                              ),
-                            ),
-                            child: Text(
-                              widget.targetLabel,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: _primaryGreen.withValues(alpha: 0.86),
-                                fontSize: 13 * widget.scale,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (widget.tesbihModeEnabled)
                         Positioned(
-                          right: (-widget.counterSize * 0.018)
-                              .clamp(-8.0, -5.0)
-                              .toDouble(),
-                          top: (widget.counterSize * 0.395)
-                              .clamp(114.0, 151.0)
-                              .toDouble(),
+                          right: widget.tesbihRight,
+                          top: widget.tesbihTop,
+                          width: widget.tesbihWidth,
+                          height: widget.tesbihHeight,
                           child: IgnorePointer(
-                            child: AnimatedOpacity(
-                              opacity:
-                                  _pullHintIntroReady &&
-                                      _showPullHint &&
-                                      _pullHintCompletedPulls < 2
-                                  ? 1
-                                  : 0,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOutCubic,
-                              child: AnimatedSlide(
-                                offset:
-                                    _pullHintIntroReady &&
-                                        _showPullHint &&
-                                        _pullHintCompletedPulls < 2
-                                    ? Offset.zero
-                                    : const Offset(0.08, 0.12),
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOutCubic,
-                                child: AnimatedScale(
-                                  scale:
-                                      _pullHintIntroReady &&
-                                          _showPullHint &&
-                                          _pullHintCompletedPulls < 2
-                                      ? 1
-                                      : 0.92,
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeOutBack,
-                                  child: _TesbihPullHintPill(
+                            child: AnimatedBuilder(
+                              animation: _tesbihModeController,
+                              builder: (context, child) {
+                                return _StaticTesbihAssetReveal(
+                                  fadeOutProgress: _tesbihModeController.value,
+                                  tesbihModeEnabled: widget.tesbihModeEnabled,
+                                  child: child!,
+                                );
+                              },
+                              child: Image.asset(
+                                _tesbihAsset,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (widget.tesbihModeEnabled)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: AnimatedBuilder(
+                                animation: Listenable.merge([
+                                  _beadSlideController,
+                                  _tesbihModeController,
+                                  _pullReturnController,
+                                ]),
+                                builder: (context, _) {
+                                  final revealProgress = _tesbihModeController
+                                      .value
+                                      .clamp(0.0, 1.0)
+                                      .toDouble();
+                                  return PremiumTesbihPullLayer(
                                     scale: widget.scale,
-                                    animation: _pullHintController,
+                                    beadShift: _visualBeadShift,
+                                    lowerBeadShift: _lowerVisualBeadShift,
+                                    pullFraction: _pullFraction,
+                                    enabled: true,
+                                    revealProgress: revealProgress,
+                                    activeBeadIndex: _activePulledBeadIndex,
+                                    activeBeadProgress:
+                                        _activePulledBeadProgress,
+                                    suppressedBeadIndex: null,
+                                    pass: PremiumTesbihPullLayerPass
+                                        .underRingSegments,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        SizedBox.square(
+                          dimension: widget.ringSize,
+                          child: Image.asset(
+                            _counterRingAsset,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        if (widget.tesbihModeEnabled)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: AnimatedBuilder(
+                                animation: Listenable.merge([
+                                  _beadSlideController,
+                                  _tesbihModeController,
+                                  _pullReturnController,
+                                ]),
+                                builder: (context, _) {
+                                  final revealProgress = _tesbihModeController
+                                      .value
+                                      .clamp(0.0, 1.0)
+                                      .toDouble();
+                                  return PremiumTesbihPullLayer(
+                                    scale: widget.scale,
+                                    beadShift: _visualBeadShift,
+                                    lowerBeadShift: _lowerVisualBeadShift,
+                                    pullFraction: _pullFraction,
+                                    enabled: true,
+                                    revealProgress: revealProgress,
+                                    activeBeadIndex: _activePulledBeadIndex,
+                                    activeBeadProgress:
+                                        _activePulledBeadProgress,
+                                    suppressedBeadIndex: null,
+                                    pass: PremiumTesbihPullLayerPass
+                                        .overRingStrand,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        AnimatedBuilder(
+                          animation: _pressController,
+                          builder: (context, child) {
+                            final pressState = _currentPressState;
+                            final numberTravel = (2.7 * widget.scale)
+                                .clamp(2.0, 3.4)
+                                .toDouble();
+                            final numberLift = (0.9 * widget.scale)
+                                .clamp(0.6, 1.2)
+                                .toDouble();
+                            final numberOffset =
+                                -widget.ringSize * 0.025 +
+                                pressState.easedPress * numberTravel -
+                                pressState.rebound * numberLift;
+                            final numberScale =
+                                1 -
+                                pressState.easedPress * 0.012 +
+                                pressState.rebound * 0.005;
+
+                            return Transform.translate(
+                              offset: Offset(0, numberOffset),
+                              child: Transform.scale(
+                                scale: numberScale,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: SizedBox(
+                            width: widget.counterNumberWidth,
+                            height: (widget.ringSize * 0.23)
+                                .clamp(66, 92)
+                                .toDouble(),
+                            child: AnimatedBuilder(
+                              animation: _countPopController,
+                              builder: (context, child) {
+                                final progress = _countPopController.value
+                                    .clamp(0.0, 1.0)
+                                    .toDouble();
+                                final pop = Curves.easeOutBack
+                                    .transform(progress)
+                                    .clamp(0.0, 1.12)
+                                    .toDouble();
+                                final settle = Curves.easeOutCubic.transform(
+                                  progress,
+                                );
+                                final scale = 0.92 + pop * 0.08;
+                                final lift =
+                                    (1 - settle) * widget.ringSize * 0.014;
+
+                                return Transform.translate(
+                                  offset: Offset(0, lift),
+                                  child: Transform.scale(
+                                    scale: scale,
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '${widget.count}',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _primaryGreen,
+                                    fontSize: 90 * widget.scale,
+                                    fontWeight: FontWeight.w900,
+                                    height: 0.9,
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                    ],
+                        AnimatedBuilder(
+                          animation: _pressController,
+                          builder: (context, child) {
+                            final pressState = _currentPressState;
+                            final pillTravel = (2.2 * widget.scale)
+                                .clamp(1.6, 2.8)
+                                .toDouble();
+                            final pillLift = (0.7 * widget.scale)
+                                .clamp(0.5, 1.0)
+                                .toDouble();
+
+                            return Positioned(
+                              top:
+                                  widget.targetPillTop +
+                                  pressState.easedPress * pillTravel -
+                                  pressState.rebound * pillLift,
+                              left: 0,
+                              right: 0,
+                              child: child!,
+                            );
+                          },
+                          child: Center(
+                            child: Container(
+                              width: widget.targetPillWidth,
+                              height: widget.targetPillHeight,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _counterTargetPillSurface.withValues(
+                                  alpha: 0.82,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: _mutedGold.withValues(alpha: 0.30),
+                                ),
+                              ),
+                              child: Text(
+                                widget.targetLabel,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _primaryGreen.withValues(alpha: 0.86),
+                                  fontSize: 13 * widget.scale,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (widget.tesbihModeEnabled)
+                          Positioned(
+                            right: (-widget.counterSize * 0.018)
+                                .clamp(-8.0, -5.0)
+                                .toDouble(),
+                            top: (widget.counterSize * 0.395)
+                                .clamp(114.0, 151.0)
+                                .toDouble(),
+                            child: IgnorePointer(
+                              child: AnimatedOpacity(
+                                opacity:
+                                    _pullHintIntroReady &&
+                                        _showPullHint &&
+                                        _pullHintCompletedPulls < 2
+                                    ? 1
+                                    : 0,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutCubic,
+                                child: AnimatedSlide(
+                                  offset:
+                                      _pullHintIntroReady &&
+                                          _showPullHint &&
+                                          _pullHintCompletedPulls < 2
+                                      ? Offset.zero
+                                      : const Offset(0.08, 0.12),
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutCubic,
+                                  child: AnimatedScale(
+                                    scale:
+                                        _pullHintIntroReady &&
+                                            _showPullHint &&
+                                            _pullHintCompletedPulls < 2
+                                        ? 1
+                                        : 0.92,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOutBack,
+                                    child: _TesbihPullHintPill(
+                                      scale: widget.scale,
+                                      animation: _pullHintController,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1748,18 +1830,50 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     );
   }
 
-  double get _pullThreshold => (62 * widget.scale).clamp(54, 74).toDouble();
+  double get _pullThreshold => (25.5 * widget.scale).clamp(22, 31).toDouble();
 
-  double get _pullFraction =>
+  double get _gesturePullFraction =>
       (_dragPullDistance / _pullThreshold).clamp(0.0, 1.0).toDouble();
+
+  double get _pullFraction {
+    if (_isDraggingTesbih) {
+      return _gesturePullFraction;
+    }
+
+    final returnProgress = Curves.easeOutCubic.transform(
+      _pullReturnController.value.clamp(0.0, 1.0).toDouble(),
+    );
+    return (_pullReturnStartFraction * (1 - returnProgress))
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
 
   double get _currentBeadShift {
     final slide = Curves.easeOutCubic.transform(
       _beadSlideController.value.clamp(0.0, 1.0).toDouble(),
     );
-    final animatedShift =
-        _beadShiftStart + (_beadShiftEnd - _beadShiftStart) * slide;
-    return animatedShift + _pullFraction * _livePullBeadShiftSlots;
+    return _beadShiftStart + (_beadShiftEnd - _beadShiftStart) * slide;
+  }
+
+  double get _visualBeadShift => _currentBeadShift;
+
+  double get _lowerVisualBeadShift {
+    if (_pullCompletedForGesture) {
+      return _pendingBeadSettleStart ?? _currentBeadShift;
+    }
+
+    return _currentBeadShift + _pullFraction * _livePullBeadShiftSlots;
+  }
+
+  double? get _activePulledBeadProgress {
+    if (_activePulledBeadIndex == null) return null;
+    final start = _activeBeadStartProgress;
+    final end = _activeBeadEndProgress;
+    if (start == null || end == null) return null;
+
+    final softenedPull = math.pow(_pullFraction, 1.55).toDouble();
+    final easedPull = Curves.easeInOutCubic.transform(softenedPull);
+    return start + (end - start) * easedPull;
   }
 
   _CounterPressState get _currentPressState {
@@ -1799,6 +1913,62 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     widget.onIncrement();
   }
 
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!widget.tesbihModeEnabled) return;
+    _pendingTesbihActiveBead = _tesbihBeadSnapshotAt(event.localPosition);
+    if (_pendingTesbihActiveBead == null &&
+        !_isTesbihPullStart(event.localPosition)) {
+      return;
+    }
+
+    _tesbihPointer = event.pointer;
+    _lastTesbihPointerPosition = event.localPosition;
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!widget.tesbihModeEnabled || event.pointer != _tesbihPointer) return;
+
+    final lastPosition = _lastTesbihPointerPosition ?? event.localPosition;
+    final delta = event.localPosition - lastPosition;
+    _lastTesbihPointerPosition = event.localPosition;
+
+    if (!_isDraggingTesbih) {
+      final activeBead =
+          _pendingTesbihActiveBead ??
+          _tesbihBeadSnapshotAt(event.localPosition);
+      if (activeBead == null || delta.dy <= 0) return;
+      _beginTesbihPull(activeBead);
+    }
+
+    _applyTesbihPullDelta(delta);
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer != _tesbihPointer) return;
+    _tesbihPointer = null;
+    _lastTesbihPointerPosition = null;
+    if (_pullCompletedForGesture) {
+      _releaseCompletedPullInput();
+      return;
+    }
+    if (_isDraggingTesbih) {
+      _endTesbihPull();
+    } else {
+      _pendingTesbihActiveBead = null;
+    }
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _tesbihPointer) return;
+    _tesbihPointer = null;
+    _lastTesbihPointerPosition = null;
+    if (_pullCompletedForGesture) {
+      _releaseCompletedPullInput();
+      return;
+    }
+    _cancelTesbihPull();
+  }
+
   void _playAcceptedTapPulse() {
     _pressController.stop();
     final visiblePress = math
@@ -1819,28 +1989,76 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
 
   void _handlePanStart(DragStartDetails details) {
     if (!widget.tesbihModeEnabled) return;
-    _isDraggingTesbih = _isTesbihPullStart(details.localPosition);
+    if (_tesbihPointer != null) return;
+
+    final activeBead =
+        _pendingTesbihActiveBead ??
+        _tesbihBeadSnapshotAt(details.localPosition);
+    _isDraggingTesbih =
+        activeBead != null || _isTesbihPullStart(details.localPosition);
     if (!_isDraggingTesbih) return;
 
-    _startSonarFromDialCenter();
-    setState(() {
-      _dragPullDistance = 0;
-      _pullCompletedForGesture = false;
-    });
+    if (activeBead == null) {
+      _isDraggingTesbih = false;
+      return;
+    }
+
+    _beginTesbihPull(activeBead);
   }
 
   void _handlePanUpdate(DragUpdateDetails details) {
+    if (_tesbihPointer != null) return;
     if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
+    _applyTesbihPullDelta(details.delta);
+  }
 
-    final diagonalPull = details.delta.dy - details.delta.dx * 0.12;
+  void _handlePanEnd(DragEndDetails details) {
+    if (_tesbihPointer != null) return;
+    if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
+    _endTesbihPull();
+  }
+
+  void _handlePanCancel() {
+    if (_tesbihPointer != null) return;
+    _cancelTesbihPull();
+  }
+
+  void _beginTesbihPull(PremiumTesbihBeadSnapshot activeBead) {
+    if (_isDraggingTesbih && _activePulledBeadIndex != null) return;
+
+    _beadSettleGeneration++;
+    _pullReturnController.stop();
+    _startSonarFromDialCenter();
+    setState(() {
+      _dragPullDistance = 0;
+      _pullReturnStartFraction = 0;
+      _pullReturnController.value = 1;
+      _isDraggingTesbih = true;
+      _pullCompletedForGesture = false;
+      _pendingTesbihActiveBead = null;
+      _activePulledBeadIndex = activeBead.index;
+      _activeBeadStartProgress = activeBead.progress;
+      _activeBeadEndProgress =
+          activeBead.receiveGapProgress ??
+          _activeBeadEndProgressFor(activeBead.progress);
+    });
+  }
+
+  void _applyTesbihPullDelta(Offset delta) {
+    if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
+    if (_pullCompletedForGesture) {
+      return;
+    }
+
+    final diagonalPull = delta.dy - delta.dx * 0.12;
     final effectivePull = math.max(0.0, diagonalPull);
     if (effectivePull == 0 && _dragPullDistance == 0) return;
 
-    final currentFraction = _pullFraction;
-    final maxStep = (9.6 * widget.scale).clamp(7.8, 11.2).toDouble();
+    final currentFraction = _gesturePullFraction;
+    final maxStep = (30.0 * widget.scale).clamp(24.0, 36.0).toDouble();
     final resistedPull =
         math.min(effectivePull, maxStep) *
-        (0.58 + (1 - currentFraction) * 0.20);
+        (1.40 + (1 - currentFraction) * 0.22);
     final nextDistance = (_dragPullDistance + resistedPull).clamp(
       0.0,
       _pullThreshold * 1.12,
@@ -1848,7 +2066,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     if (!_pullCompletedForGesture && nextDistance >= _pullThreshold) {
       final settleStart = _beadShiftEnd + _livePullBeadShiftSlots;
       setState(() {
-        _dragPullDistance = 0;
+        _dragPullDistance = _pullThreshold;
         _pullCompletedForGesture = true;
       });
       _performTesbihPullIncrement(settleStart: settleStart);
@@ -1858,31 +2076,78 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     setState(() => _dragPullDistance = nextDistance);
   }
 
-  void _handlePanEnd(DragEndDetails details) {
+  void _endTesbihPull() {
     if (!widget.tesbihModeEnabled || !_isDraggingTesbih) return;
+    if (_pullCompletedForGesture) {
+      return;
+    }
+
     final shouldCompletePull =
-        !_pullCompletedForGesture && _pullFraction >= 0.58;
-    final settleStart = _beadShiftEnd + _pullFraction * _livePullBeadShiftSlots;
+        !_pullCompletedForGesture && _gesturePullFraction >= 0.52;
+    final returnFraction = _gesturePullFraction;
+    final settleStart = _beadShiftEnd + _livePullBeadShiftSlots;
+    if (shouldCompletePull) {
+      setState(() {
+        _dragPullDistance = _pullThreshold;
+        _pullCompletedForGesture = true;
+      });
+      _performTesbihPullIncrement(settleStart: settleStart);
+      return;
+    }
+
     setState(() {
       _dragPullDistance = 0;
       _isDraggingTesbih = false;
       _pullCompletedForGesture = false;
+      _pendingTesbihActiveBead = null;
     });
-    if (shouldCompletePull) {
-      _performTesbihPullIncrement(settleStart: settleStart);
+    if (returnFraction > 0) {
+      _animatePullReturnFrom(returnFraction);
+    } else {
+      _clearActivePulledBead();
     }
   }
 
-  void _handlePanCancel() {
-    if (_dragPullDistance == 0 && !_isDraggingTesbih) return;
+  void _cancelTesbihPull() {
+    if (_dragPullDistance == 0 && !_isDraggingTesbih) {
+      _pendingTesbihActiveBead = null;
+      return;
+    }
+    if (_pullCompletedForGesture) {
+      return;
+    }
+
+    final returnFraction = _gesturePullFraction;
     setState(() {
       _dragPullDistance = 0;
       _isDraggingTesbih = false;
       _pullCompletedForGesture = false;
+      _pendingTesbihActiveBead = null;
+    });
+    if (returnFraction > 0) {
+      _animatePullReturnFrom(returnFraction);
+    } else {
+      _clearActivePulledBead();
+    }
+  }
+
+  void _releaseCompletedPullInput() {
+    if (!_pullCompletedForGesture) return;
+
+    setState(() {
+      _dragPullDistance = 0;
+      _pullReturnStartFraction = 0;
+      _isDraggingTesbih = false;
+      _activePulledBeadIndex = null;
+      _activeBeadStartProgress = null;
+      _activeBeadEndProgress = null;
+      _pendingTesbihActiveBead = null;
     });
   }
 
   void _performTesbihPullIncrement({required double settleStart}) {
+    _pullReturnController.stop();
+    _pullReturnStartFraction = 0;
     _pendingBeadSettleStart = settleStart;
     _registerPullHintProgress();
     _startSonarFromDialCenter();
@@ -1946,15 +2211,68 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     });
   }
 
-  bool _isTesbihPullStart(Offset localPosition) {
+  void _animatePullReturnFrom(double fraction) {
+    _pullReturnController.stop();
+    setState(() {
+      _pullReturnStartFraction = fraction.clamp(0.0, 1.0).toDouble();
+      _pullReturnController.value = 0;
+    });
+    _pullReturnController.forward(from: 0).whenComplete(() {
+      if (!mounted || _isDraggingTesbih) return;
+      setState(() {
+        _pullReturnStartFraction = 0;
+        _activePulledBeadIndex = null;
+        _activeBeadStartProgress = null;
+        _activeBeadEndProgress = null;
+        _pendingTesbihActiveBead = null;
+      });
+    });
+  }
+
+  void _clearActivePulledBead() {
+    setState(() {
+      _activePulledBeadIndex = null;
+      _activeBeadStartProgress = null;
+      _activeBeadEndProgress = null;
+      _pendingTesbihActiveBead = null;
+    });
+  }
+
+  PremiumTesbihBeadSnapshot? _tesbihBeadSnapshotAt(Offset localPosition) {
+    if (!_isTesbihPullStart(localPosition)) return null;
+    return nearestPremiumTesbihBeadSnapshot(
+      size: Size.square(widget.counterSize),
+      position: _dialPositionForLocal(localPosition),
+      beadShift: _currentBeadShift,
+      revealProgress: _tesbihModeController.value,
+    );
+  }
+
+  double _activeBeadEndProgressFor(double startProgress) {
+    if (startProgress < _pullHiddenGapStart) {
+      return (_pullHiddenGapEnd + _tesbihBeadSlotProgress * 0.88)
+          .clamp(0.54, 0.57)
+          .toDouble();
+    }
+
+    return (startProgress + _tesbihBeadSlotProgress * 1.08)
+        .clamp(0.56, 0.80)
+        .toDouble();
+  }
+
+  Offset _dialPositionForLocal(Offset localPosition) {
     final dialLeft = (widget.areaWidth - widget.counterSize) / 2;
     final dialTop =
         (widget.areaHeight - widget.counterSize) / 2 - widget.counterVisualLift;
-    final dialPosition = localPosition - Offset(dialLeft, dialTop);
+    return localPosition - Offset(dialLeft, dialTop);
+  }
+
+  bool _isTesbihPullStart(Offset localPosition) {
+    final dialPosition = _dialPositionForLocal(localPosition);
     final x = dialPosition.dx / widget.counterSize;
     final y = dialPosition.dy / widget.counterSize;
 
-    return x >= 0.42 && x <= 0.94 && y >= 0.30 && y <= 0.98;
+    return x >= 0.28 && x <= 1.24 && y >= 0.0 && y <= 1.14;
   }
 
   void _releasePress() {

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/local/app_database.dart';
 import '../../../core/data/local/database_provider.dart';
+import '../../esma/data/esma_data.dart';
 import '../../settings/application/settings_controller.dart';
 import '../data/builtin_dhikrs.dart';
 import '../domain/dhikr_item.dart';
@@ -9,9 +10,10 @@ import '../domain/dhikr_item.dart';
 final dhikrItemsProvider = StreamProvider<List<DhikrItem>>((ref) async* {
   final favorites = ref.watch(settingsControllerProvider).favorites;
   final database = ref.watch(appDatabaseProvider);
-  final builtIns = builtinDhikrs
-      .map((item) => item.copyWith(isFavorite: favorites.contains(item.id)))
-      .toList();
+  final builtIns =
+      [...builtinDhikrs, ...esmaItems.map((item) => item.toDhikr())]
+          .map((item) => item.copyWith(isFavorite: favorites.contains(item.id)))
+          .toList();
 
   yield builtIns;
 

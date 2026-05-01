@@ -4,6 +4,7 @@ import AVFoundation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private var feedbackChannel: FlutterMethodChannel?
   private var successPlayer: AVAudioPlayer?
   private var beadCollisionPlayer: AVAudioPlayer?
 
@@ -12,7 +13,6 @@ import AVFoundation
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     prepareFeedbackSounds()
-    configureFeedbackChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -20,15 +20,13 @@ import AVFoundation
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 
-  private func configureFeedbackChannel() {
-    guard let controller = window?.rootViewController as? FlutterViewController else {
-      return
-    }
-
-    FlutterMethodChannel(
+  func configureFeedbackChannel(for controller: FlutterViewController) {
+    feedbackChannel = FlutterMethodChannel(
       name: "pro.zikirmatik.app/feedback",
       binaryMessenger: controller.binaryMessenger
-    ).setMethodCallHandler { [weak self] call, result in
+    )
+
+    feedbackChannel?.setMethodCallHandler { [weak self] call, result in
       switch call.method {
       case "vibrate":
         self?.vibrate()
@@ -47,7 +45,11 @@ import AVFoundation
 
   private func prepareFeedbackSounds() {
     do {
-      try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
+      try AVAudioSession.sharedInstance().setCategory(
+        .playback,
+        mode: .default,
+        options: [.mixWithOthers]
+      )
       try AVAudioSession.sharedInstance().setActive(true)
     } catch {
       // Feedback is optional; the app should keep working if audio setup fails.

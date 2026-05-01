@@ -105,6 +105,40 @@ void main() {
     expect(quickStartCenter.dy, greaterThan(790));
   });
 
+  testWidgets('home header scrolls with the page content', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(393, 852),
+              padding: EdgeInsets.only(top: 47, bottom: 34),
+            ),
+            child: HomeScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final menuIcon = find.byIcon(Icons.menu_rounded);
+    final topBeforeScroll = tester.getTopLeft(menuIcon).dy;
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -160),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.getTopLeft(menuIcon).dy, lessThan(topBeforeScroll - 80));
+  });
+
   testWidgets('library selection opens counter and counter resets', (
     tester,
   ) async {

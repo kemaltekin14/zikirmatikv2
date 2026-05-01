@@ -53,4 +53,28 @@ void main() {
 
     expect(calls.single.method, 'playBeadCollisionSound');
   });
+
+  test(
+    'tesbih tick uses softer native vibration and throttles repeats',
+    () async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_feedbackChannel, (call) async {
+            calls.add(call);
+            return null;
+          });
+
+      final service = InteractionFeedbackService(
+        () => const SettingsState(vibrationEnabled: true, soundEnabled: false),
+      );
+
+      service.tesbihTick();
+      service.tesbihTick();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'vibrate');
+      expect(calls.single.arguments, {'durationMs': 34, 'amplitude': 230});
+    },
+  );
 }

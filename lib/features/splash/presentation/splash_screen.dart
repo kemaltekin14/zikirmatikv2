@@ -29,7 +29,7 @@ class _SplashScreenState extends State<SplashScreen>
   );
   static const _logoImage = AssetImage('assets/images/splash_logo_icon.png');
   static const _dashboardHeroImage = AssetImage(
-    'assets/images/home_mosque.png',
+    'assets/images/home_mosque.webp',
   );
   static const _splashDuration = Duration(milliseconds: 4650);
   static const _transitionDuration = Duration(milliseconds: 850);
