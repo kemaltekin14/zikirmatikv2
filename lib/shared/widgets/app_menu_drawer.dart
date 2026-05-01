@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -10,9 +11,9 @@ import '../../core/services/interaction_feedback_service.dart';
 import '../../features/counter/application/counter_controller.dart';
 import '../layout/proportional_layout.dart';
 
-const _menuSurface = Color(0xFFE9EEE4);
-const _menuSurfaceLight = Color(0xFFF1F4ED);
-const _menuSurfaceWarm = Color(0xFFDDE7DA);
+const _menuSurface = Color(0xFFF6F2ED);
+const _menuSurfaceLight = Color(0xFFFCF9F4);
+const _menuSurfaceWarm = Color(0xFFEDE6DD);
 const _menuGreen = Color(0xFF13472F);
 const _menuGreenSoft = Color(0xFF327653);
 const _menuText = Color(0xFF17392B);
@@ -21,6 +22,7 @@ const _menuDivider = Color(0xFFDDE4D9);
 const _wordmarkSuffixGreen = Color(0xFF828C6F);
 const _logoAsset = 'assets/images/splash_logo_icon.png';
 const _bottomMotifAsset = 'assets/images/menu_bottom_motif.webp';
+const _drawerCloseNavigationDelay = Duration(milliseconds: 280);
 
 void openAppMenu(BuildContext context) {
   Scaffold.maybeOf(context)?.openDrawer();
@@ -141,7 +143,7 @@ class AppMenuDrawer extends ConsumerWidget {
                                 ref
                                     .read(interactionFeedbackServiceProvider)
                                     .selection();
-                                _navigateTo(context, item.route);
+                                unawaited(_navigateTo(context, item.route));
                               },
                             );
                           },
@@ -342,6 +344,7 @@ class _JourneyCard extends StatelessWidget {
                       ),
                       SizedBox(height: 4 * scale),
                       Text(
+                        key: const Key('menu.activeDhikrName'),
                         state.activeDhikr.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -454,12 +457,29 @@ class _MenuDestinationTile extends StatelessWidget {
   }
 }
 
-void _navigateTo(BuildContext context, String route, {bool push = false}) {
+Future<void> _navigateTo(
+  BuildContext context,
+  String route, {
+  bool push = false,
+}) async {
   final router = GoRouter.of(context);
   final currentPath = GoRouterState.of(context).uri.path;
-  Navigator.of(context).pop();
+  final shouldNavigate = currentPath != route;
+  final scaffold = Scaffold.maybeOf(context);
 
-  if (currentPath == route) return;
+  if (scaffold?.isDrawerOpen ?? false) {
+    scaffold!.closeDrawer();
+    if (shouldNavigate) {
+      await Future<void>.delayed(_drawerCloseNavigationDelay);
+    }
+  } else {
+    Navigator.of(context).pop();
+    if (shouldNavigate) {
+      await Future<void>.delayed(_drawerCloseNavigationDelay);
+    }
+  }
+
+  if (!shouldNavigate) return;
   if (push || route != AppRoutes.dashboard) {
     router.push(route);
   } else {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zikirmatik_v2/app/zikirmatik_app.dart';
 import 'package:zikirmatik_v2/features/counter/presentation/zikr_counter_screen.dart';
 import 'package:zikirmatik_v2/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:zikirmatik_v2/features/dhikr_library/data/builtin_dhikrs.dart';
 import 'package:zikirmatik_v2/features/dhikr_library/presentation/dhikr_library_screen.dart';
 import 'package:zikirmatik_v2/features/splash/presentation/splash_screen.dart';
 
@@ -41,6 +44,12 @@ void main() {
     for (var i = 0; i < maxPumps && finder.evaluate().isEmpty; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
+  }
+
+  Future<void> openMenu(WidgetTester tester) async {
+    await tester.tap(find.byIcon(Icons.menu_rounded).hitTestable().first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
   }
 
   testWidgets('app starts with asset based splash', (tester) async {
@@ -164,11 +173,6 @@ void main() {
     expect(find.text('0'), findsOneWidget);
 
     final counterFinder = find.byKey(const Key('counter.increment'));
-    final counterRect = tester.getRect(counterFinder);
-    final tesbihPullStart = Offset(
-      counterRect.left + counterRect.width * 0.62,
-      counterRect.top + counterRect.height * 0.50,
-    );
 
     await tester.tap(counterFinder);
     await tester.pump(const Duration(milliseconds: 100));
@@ -181,14 +185,24 @@ void main() {
     expect(find.text('0'), findsOneWidget);
 
     await tester.tap(find.text('TESBİH\nMODU'));
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 2200));
 
     await tester.tap(counterFinder);
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('0'), findsOneWidget);
 
-    await tester.dragFrom(tesbihPullStart, const Offset(0, 180));
+    final tesbihCounterRect = tester.getRect(counterFinder);
+    final tesbihPullStart = Offset(
+      tesbihCounterRect.left + tesbihCounterRect.width * 0.86,
+      tesbihCounterRect.top + tesbihCounterRect.height * 0.30,
+    );
+
+    await tester.timedDragFrom(
+      tesbihPullStart,
+      const Offset(0, 220),
+      const Duration(milliseconds: 600),
+    );
     await tester.pump(const Duration(milliseconds: 360));
 
     expect(find.text('1'), findsOneWidget);
@@ -216,4 +230,98 @@ void main() {
       expect(find.byKey(const Key('counter.increment')), findsOneWidget);
     },
   );
+
+  testWidgets('menu waits for drawer close before returning home', (
+    tester,
+  ) async {
+    await pumpMobileApp(tester);
+
+    await tester.tap(find.byKey(const Key('home.chooseDhikr')));
+    await pumpUntilFound(tester, find.byType(DhikrLibraryScreen));
+    await openMenu(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text('Ana Sayfa'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.byType(DhikrLibraryScreen), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntilFound(tester, find.byType(HomeScreen));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(Drawer), findsNothing);
+  });
+
+  testWidgets('menu restores active dhikr from the last started id', (
+    tester,
+  ) async {
+    final restoredDhikr = builtinDhikrs.firstWhere(
+      (item) => item.id == 'estagfirullah',
+    );
+
+    await pumpMobileApp(
+      tester,
+      sharedPreferences: {'counter.lastStartedDhikrId': restoredDhikr.id},
+    );
+
+    expect(find.text(restoredDhikr.name), findsOneWidget);
+    expect(find.text('0 / ${restoredDhikr.defaultTarget}'), findsOneWidget);
+
+    await openMenu(tester);
+
+    expect(find.byType(Drawer), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text(restoredDhikr.name),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('menu restores active counter session after restart', (
+    tester,
+  ) async {
+    final session = jsonEncode({
+      'activeDhikr': {
+        'id': 'custom-sabah-virdi',
+        'name': 'Sabah virdi',
+        'category': 'Ozel',
+        'defaultTarget': 41,
+        'isBuiltIn': false,
+      },
+      'count': 12,
+      'target': 41,
+    });
+
+    await pumpMobileApp(
+      tester,
+      sharedPreferences: {'counter.activeSession': session},
+    );
+
+    expect(find.text('Sabah virdi'), findsOneWidget);
+    expect(find.text('12 / 41'), findsOneWidget);
+
+    await openMenu(tester);
+
+    expect(find.byType(Drawer), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text('Sabah virdi'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byType(Drawer), matching: find.text('%29')),
+      findsOneWidget,
+    );
+  });
 }

@@ -1387,12 +1387,17 @@ class ContinueZikrCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final historyEntries = ref
+    final storedHistoryEntries = ref
         .watch(_dashboardHistoryProvider)
         .maybeWhen(
           data: (entries) => entries.isEmpty ? _sampleHistoryEntries : entries,
           orElse: () => _sampleHistoryEntries,
         );
+    final historyEntries = _historyEntriesWithActiveCounter(
+      storedHistoryEntries,
+      ref.watch(counterControllerProvider),
+      hasRememberedDhikr: ref.watch(lastStartedDhikrIdProvider) != null,
+    );
     final visibleEntries = historyEntries.take(3).toList();
     final feedback = ref.read(interactionFeedbackServiceProvider);
 
@@ -1496,6 +1501,8 @@ class _HistoryEntry {
     required this.target,
     required this.completed,
     required this.updatedAt,
+    this.active = false,
+    this.paused = false,
   });
 
   final String dhikrId;
@@ -1504,6 +1511,8 @@ class _HistoryEntry {
   final int target;
   final bool completed;
   final DateTime updatedAt;
+  final bool active;
+  final bool paused;
 
   double get progress {
     if (target <= 0) return 0;
@@ -1564,6 +1573,46 @@ List<_HistoryEntry> _historyEntriesFromEvents(List<CounterEvent> events) {
   ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
   return entries;
+}
+
+List<_HistoryEntry> _historyEntriesWithActiveCounter(
+  List<_HistoryEntry> entries,
+  CounterState counter, {
+  required bool hasRememberedDhikr,
+}) {
+  if (counter.count <= 0 && !hasRememberedDhikr) return entries;
+
+  final activeEntry = _HistoryEntry(
+    dhikrId: counter.activeDhikr.id,
+    title: counter.activeDhikr.name,
+    count: counter.count,
+    target: counter.target,
+    completed: !counter.isInfinite && counter.count >= counter.target,
+    updatedAt: DateTime.now(),
+    active: true,
+  );
+
+  final mergedEntries = [
+    activeEntry,
+    for (final entry in entries)
+      if (!(entry.dhikrId == activeEntry.dhikrId && !entry.completed)) entry,
+  ];
+
+  return [
+    for (final entry in mergedEntries)
+      if (entry.active || entry.completed)
+        entry
+      else
+        _HistoryEntry(
+          dhikrId: entry.dhikrId,
+          title: entry.title,
+          count: entry.count,
+          target: entry.target,
+          completed: entry.completed,
+          updatedAt: entry.updatedAt,
+          paused: true,
+        ),
+  ];
 }
 
 List<_HistoryEntry> get _sampleHistoryEntries {
@@ -1802,7 +1851,12 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = entry.completed ? const Color(0xFFB99A55) : _buttonGreen;
+    final accent = entry.completed
+        ? const Color(0xFFB99A55)
+        : entry.paused
+        ? _secondaryText
+        : _buttonGreen;
+    final statusLabel = _historyStatusLabel(entry);
 
     return Material(
       color: Colors.transparent,
@@ -1827,6 +1881,7 @@ class _HistoryRow extends StatelessWidget {
                 _HistoryStatusMark(
                   scale: scale,
                   completed: entry.completed,
+                  paused: entry.paused,
                   accent: accent,
                 ),
                 SizedBox(width: 9 * scale),
@@ -1873,7 +1928,7 @@ class _HistoryRow extends StatelessWidget {
                           ),
                           SizedBox(width: 8 * scale),
                           Text(
-                            entry.statusLabel,
+                            statusLabel,
                             style: TextStyle(
                               color: accent,
                               fontSize: 10.1 * scale,
@@ -1905,11 +1960,13 @@ class _HistoryStatusMark extends StatelessWidget {
   const _HistoryStatusMark({
     required this.scale,
     required this.completed,
+    required this.paused,
     required this.accent,
   });
 
   final double scale;
   final bool completed;
+  final bool paused;
   final Color accent;
 
   @override
@@ -1926,13 +1983,24 @@ class _HistoryStatusMark extends StatelessWidget {
       child: SizedBox.square(
         dimension: 24 * scale,
         child: Icon(
-          completed ? Icons.check_rounded : Icons.play_arrow_rounded,
+          completed
+              ? Icons.check_rounded
+              : paused
+              ? Icons.pause_rounded
+              : Icons.play_arrow_rounded,
           color: accent,
           size: 15 * scale,
         ),
       ),
     );
   }
+}
+
+String _historyStatusLabel(_HistoryEntry entry) {
+  if (entry.completed) return entry.statusLabel;
+  if (entry.active && entry.count <= 0) return 'Başlamadı';
+  if (entry.paused) return 'Ara verildi';
+  return entry.statusLabel;
 }
 
 class _HistoryProgressStrip extends StatelessWidget {
@@ -2100,12 +2168,18 @@ class HomeBottomNav extends ConsumerWidget {
       contentWidth,
     );
     final navRadius = BorderRadius.circular(32 * scale);
+    final activeCounterState = ref.watch(counterControllerProvider);
     final lastStartedDhikrId = ref.watch(lastStartedDhikrIdProvider);
     final dhikrs = ref
         .watch(dhikrItemsProvider)
         .maybeWhen(data: (items) => items, orElse: () => builtinDhikrs);
+    final quickStartDhikrId =
+        lastStartedDhikrId ?? activeCounterState.activeDhikr.id;
     final quickStartDhikr =
-        _dhikrById(dhikrs, lastStartedDhikrId ?? 'subhanallah') ??
+        _dhikrById(dhikrs, quickStartDhikrId) ??
+        (activeCounterState.activeDhikr.id == quickStartDhikrId
+            ? activeCounterState.activeDhikr
+            : null) ??
         _dhikrById(builtinDhikrs, 'subhanallah') ??
         builtinDhikrs.first;
     final feedback = ref.read(interactionFeedbackServiceProvider);
@@ -2237,7 +2311,7 @@ class HomeBottomNav extends ConsumerWidget {
   }
 }
 
-enum HomeBottomNavDestination { home, dhikrLibrary, esma, statistics }
+enum HomeBottomNavDestination { none, home, dhikrLibrary, esma, statistics }
 
 DhikrItem? _dhikrById(List<DhikrItem> items, String? id) {
   if (id == null) return null;

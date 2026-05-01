@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +9,7 @@ import '../../../core/services/interaction_feedback_service.dart';
 import '../../../core/services/app_services.dart';
 import '../../dhikr_library/data/builtin_dhikrs.dart';
 import '../../dhikr_library/domain/dhikr_item.dart';
+import '../../esma/data/esma_data.dart';
 
 class CounterState {
   const CounterState({
@@ -42,9 +44,14 @@ class CounterState {
 }
 
 class CounterController extends Notifier<CounterState> {
+  static const _activeSessionStorageKey = 'counter.activeSession';
+
+  var _changedBeforeRestore = false;
+
   @override
   CounterState build() {
     final defaultDhikr = builtinDhikrs.first;
+    Future.microtask(_restoreActiveSession);
     return CounterState(
       activeDhikr: defaultDhikr,
       count: 0,
@@ -66,7 +73,9 @@ class CounterController extends Notifier<CounterState> {
       target: resolvedTarget,
       completed: resolvedTarget > 0 && resolvedCount >= resolvedTarget,
     );
+    _changedBeforeRestore = true;
     ref.read(lastStartedDhikrIdProvider.notifier).remember(dhikr.id);
+    unawaited(_persistActiveSession());
     unawaited(
       ref
           .read(analyticsServiceProvider)
@@ -76,6 +85,8 @@ class CounterController extends Notifier<CounterState> {
 
   void setTarget(int target) {
     state = state.copyWith(target: target, completed: false);
+    _changedBeforeRestore = true;
+    unawaited(_persistActiveSession());
   }
 
   void increment({bool useTesbihFeedback = false}) {
@@ -84,6 +95,8 @@ class CounterController extends Notifier<CounterState> {
     final nextCount = state.count + 1;
     final completed = !state.isInfinite && nextCount >= state.target;
     state = state.copyWith(count: nextCount, completed: completed);
+    _changedBeforeRestore = true;
+    unawaited(_persistActiveSession());
 
     final feedback = ref.read(interactionFeedbackServiceProvider);
     if (completed) {
@@ -112,6 +125,8 @@ class CounterController extends Notifier<CounterState> {
     if (state.count <= 0) return;
     final nextCount = state.count - 1;
     state = state.copyWith(count: nextCount, completed: false);
+    _changedBeforeRestore = true;
+    unawaited(_persistActiveSession());
 
     unawaited(
       ref
@@ -129,6 +144,8 @@ class CounterController extends Notifier<CounterState> {
 
   void reset() {
     state = state.copyWith(count: 0, completed: false);
+    _changedBeforeRestore = true;
+    unawaited(_persistActiveSession());
     unawaited(
       ref
           .read(appDatabaseProvider)
@@ -146,13 +163,158 @@ class CounterController extends Notifier<CounterState> {
   void dismissCompletion() {
     state = state.copyWith(completed: false);
   }
+
+  Future<void> _restoreActiveSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessionJson = prefs.getString(_activeSessionStorageKey);
+    CounterState? restored;
+
+    if (sessionJson != null) {
+      restored = _stateFromJson(sessionJson);
+    }
+
+    restored ??= _stateFromLastStartedId(
+      prefs.getString(LastStartedDhikrIdController.storageKey),
+    );
+
+    if (restored == null || _changedBeforeRestore) return;
+    state = restored;
+  }
+
+  Future<void> _persistActiveSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activeSessionStorageKey, _stateToJson(state));
+  }
+
+  CounterState? _stateFromLastStartedId(String? dhikrId) {
+    final dhikr = _knownDhikrById(dhikrId);
+    if (dhikr == null) return null;
+    return CounterState(
+      activeDhikr: dhikr,
+      count: 0,
+      target: dhikr.defaultTarget,
+    );
+  }
+
+  CounterState? _stateFromJson(String value) {
+    try {
+      final json = jsonDecode(value);
+      if (json is! Map<String, Object?>) return null;
+
+      final dhikr = _dhikrFromJson(json['activeDhikr']);
+      if (dhikr == null) return null;
+
+      final storedTarget = _intFromJson(json['target']);
+      final target = storedTarget == null || storedTarget < 0
+          ? dhikr.defaultTarget
+          : storedTarget;
+      final rawCount = _intFromJson(json['count']) ?? 0;
+      final count = rawCount < 0
+          ? 0
+          : target > 0 && rawCount > target
+          ? target
+          : rawCount;
+
+      return CounterState(
+        activeDhikr: dhikr,
+        count: count,
+        target: target,
+        completed: false,
+      );
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    }
+  }
+
+  String _stateToJson(CounterState state) {
+    return jsonEncode({
+      'activeDhikr': _dhikrToJson(state.activeDhikr),
+      'count': state.count,
+      'target': state.target,
+    });
+  }
+
+  Map<String, Object?> _dhikrToJson(DhikrItem dhikr) {
+    return {
+      'id': dhikr.id,
+      'name': dhikr.name,
+      'category': dhikr.category,
+      'defaultTarget': dhikr.defaultTarget,
+      'arabicText': dhikr.arabicText,
+      'meaning': dhikr.meaning,
+      'longMeaning': dhikr.longMeaning,
+      'isBuiltIn': dhikr.isBuiltIn,
+    };
+  }
+
+  DhikrItem? _dhikrFromJson(Object? value) {
+    if (value is! Map<String, Object?>) return null;
+
+    final id = value['id'];
+    if (id is! String || id.isEmpty) return null;
+
+    final knownDhikr = _knownDhikrById(id);
+    if (knownDhikr != null) return knownDhikr;
+
+    final name = value['name'];
+    final category = value['category'];
+    final defaultTarget = _intFromJson(value['defaultTarget']);
+    if (name is! String ||
+        name.isEmpty ||
+        category is! String ||
+        category.isEmpty ||
+        defaultTarget == null) {
+      return null;
+    }
+
+    final isBuiltIn = value['isBuiltIn'];
+
+    return DhikrItem(
+      id: id,
+      name: name,
+      category: category,
+      defaultTarget: defaultTarget,
+      arabicText: _nullableStringFromJson(value['arabicText']),
+      meaning: _nullableStringFromJson(value['meaning']),
+      longMeaning: _nullableStringFromJson(value['longMeaning']),
+      isBuiltIn: isBuiltIn is bool ? isBuiltIn : false,
+    );
+  }
+
+  DhikrItem? _knownDhikrById(String? id) {
+    if (id == null) return null;
+
+    for (final item in builtinDhikrs) {
+      if (item.id == id) return item;
+    }
+    for (final item in esmaItems) {
+      final dhikr = item.toDhikr();
+      if (dhikr.id == id) return dhikr;
+    }
+
+    return null;
+  }
+
+  int? _intFromJson(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return null;
+  }
+
+  String? _nullableStringFromJson(Object? value) {
+    return value is String && value.isNotEmpty ? value : null;
+  }
 }
 
 final counterControllerProvider =
     NotifierProvider<CounterController, CounterState>(CounterController.new);
 
 class LastStartedDhikrIdController extends Notifier<String?> {
-  static const _storageKey = 'counter.lastStartedDhikrId';
+  static const storageKey = 'counter.lastStartedDhikrId';
+
+  var _changedBeforeRestore = false;
 
   @override
   String? build() {
@@ -162,17 +324,19 @@ class LastStartedDhikrIdController extends Notifier<String?> {
 
   Future<void> _restore() async {
     final prefs = await SharedPreferences.getInstance();
-    state = prefs.getString(_storageKey);
+    if (_changedBeforeRestore) return;
+    state = prefs.getString(storageKey);
   }
 
   void remember(String dhikrId) {
     state = dhikrId;
+    _changedBeforeRestore = true;
     unawaited(_persist(dhikrId));
   }
 
   Future<void> _persist(String dhikrId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, dhikrId);
+    await prefs.setString(storageKey, dhikrId);
   }
 }
 

@@ -103,6 +103,14 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(counterControllerProvider.select((state) => state.target), (
+      previous,
+      next,
+    ) {
+      if (!mounted || _selectedTarget == next) return;
+      setState(() => _selectedTarget = next);
+    });
+
     final counter = ref.watch(counterControllerProvider);
     final settings = ref.watch(settingsControllerProvider);
     final media = MediaQuery.of(context);
