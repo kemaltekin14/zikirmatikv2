@@ -27,7 +27,7 @@ class _SplashScreenState extends State<SplashScreen>
   static const _backgroundImage = AssetImage(
     'assets/images/splash_background.jpg',
   );
-  static const _logoImage = AssetImage('assets/images/splash_logo_icon.png');
+  static const _logoImage = AssetImage('assets/images/menu_logo.png');
   static const _dashboardHeroImage = AssetImage(
     'assets/images/home_mosque.webp',
   );

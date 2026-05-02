@@ -73,6 +73,7 @@ flutter:
   assets:
     - assets/images/splash_background.jpg
     - assets/images/splash_logo_icon.png
+    - assets/images/menu_logo.png
     - assets/images/home_mosque.webp
     - assets/images/home_book.png
     - assets/images/esma-her2.webp

@@ -352,5 +352,14 @@ void main() {
       find.descendant(of: find.byType(Drawer), matching: find.text('%29')),
       findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const Key('menu.activeDhikrCard')));
+    await tester.pump();
+    await pumpUntilFound(tester, find.byType(ZikrCounterScreen));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.byType(ZikrCounterScreen), findsOneWidget);
+    expect(find.text('Sabah virdi'), findsWidgets);
+    expect(find.text('12'), findsOneWidget);
   });
 }

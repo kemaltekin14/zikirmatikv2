@@ -11,7 +11,8 @@ class ZikirmatikApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
-    final themeMode = ref.watch(settingsControllerProvider).themeMode;
+    final settings = ref.watch(settingsControllerProvider);
+    final themeMode = settings.themeMode;
 
     return MaterialApp.router(
       title: 'Zikirmatik',
@@ -22,6 +23,20 @@ class ZikirmatikApp extends ConsumerWidget {
         AppThemeMode.system => ThemeMode.system,
         AppThemeMode.light => ThemeMode.light,
         AppThemeMode.dark => ThemeMode.dark,
+      },
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        var textScale = media.textScaler.scale(1);
+        if (settings.largeTextMode && textScale < 1.12) {
+          textScale = 1.12;
+        } else if (settings.easyReadMode && textScale < 1.06) {
+          textScale = 1.06;
+        }
+
+        return MediaQuery(
+          data: media.copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child ?? const SizedBox.shrink(),
+        );
       },
       routerConfig: router,
     );

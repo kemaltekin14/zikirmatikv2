@@ -87,8 +87,18 @@ class SettingsController extends Notifier<SettingsState> {
     _persist();
   }
 
+  void setVibrationEnabled(bool value) {
+    state = state.copyWith(vibrationEnabled: value);
+    _persist();
+  }
+
   void toggleSound() {
     state = state.copyWith(soundEnabled: !state.soundEnabled);
+    _persist();
+  }
+
+  void setSoundEnabled(bool value) {
+    state = state.copyWith(soundEnabled: value);
     _persist();
   }
 
@@ -97,13 +107,39 @@ class SettingsController extends Notifier<SettingsState> {
     _persist();
   }
 
+  void setLargeTextMode(bool value) {
+    state = state.copyWith(largeTextMode: value);
+    _persist();
+  }
+
   void toggleEasyRead() {
     state = state.copyWith(easyReadMode: !state.easyReadMode);
     _persist();
   }
 
+  void setEasyReadMode(bool value) {
+    state = state.copyWith(easyReadMode: value);
+    _persist();
+  }
+
   void setThemeMode(AppThemeMode mode) {
     state = state.copyWith(themeMode: mode);
+    _persist();
+  }
+
+  void setQuietFeedbackMode(bool enabled) {
+    state = state.copyWith(vibrationEnabled: !enabled, soundEnabled: !enabled);
+    _persist();
+  }
+
+  void resetExperienceSettings() {
+    state = state.copyWith(
+      vibrationEnabled: true,
+      soundEnabled: true,
+      largeTextMode: false,
+      easyReadMode: false,
+      themeMode: AppThemeMode.system,
+    );
     _persist();
   }
 

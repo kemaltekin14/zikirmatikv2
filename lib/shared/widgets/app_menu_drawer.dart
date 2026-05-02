@@ -11,16 +11,16 @@ import '../../core/services/interaction_feedback_service.dart';
 import '../../features/counter/application/counter_controller.dart';
 import '../layout/proportional_layout.dart';
 
-const _menuSurface = Color(0xFFF6F2ED);
-const _menuSurfaceLight = Color(0xFFFCF9F4);
-const _menuSurfaceWarm = Color(0xFFEDE6DD);
+const _menuSurface = Color(0xFFFAF7EE);
+const _menuSurfaceLight = Color(0xFFFAF7EE);
+const _menuSurfaceWarm = Color(0xFFFAF7EE);
 const _menuGreen = Color(0xFF13472F);
 const _menuGreenSoft = Color(0xFF327653);
 const _menuText = Color(0xFF17392B);
 const _menuMuted = Color(0xFF6E7D73);
 const _menuDivider = Color(0xFFDDE4D9);
 const _wordmarkSuffixGreen = Color(0xFF828C6F);
-const _logoAsset = 'assets/images/splash_logo_icon.png';
+const _logoAsset = 'assets/images/menu_logo.png';
 const _bottomMotifAsset = 'assets/images/menu_bottom_motif.webp';
 const _cupertinoDrawerCloseNavigationDelay = Duration(milliseconds: 280);
 
@@ -40,6 +40,9 @@ class AppMenuDrawer extends ConsumerWidget {
     final radius = 38 * scale;
     final currentPath = GoRouterState.of(context).uri.path;
     final counterState = ref.watch(counterControllerProvider);
+    final bottomMotifHeight = 168 * scale;
+    final motifBlendHeight = 82 * scale;
+    final motifBlendLift = 10 * scale;
 
     return Drawer(
       width: drawerWidth,
@@ -75,15 +78,55 @@ class AppMenuDrawer extends ConsumerWidget {
                 left: -18 * scale,
                 right: -18 * scale,
                 bottom: 0,
-                height: 168 * scale,
+                height: bottomMotifHeight,
                 child: IgnorePointer(
                   child: Opacity(
                     opacity: 0.54,
-                    child: Image.asset(
-                      _bottomMotifAsset,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.bottomCenter,
-                      filterQuality: FilterQuality.high,
+                    child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (bounds) {
+                        return const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0x00FFFFFF),
+                            Color(0x18FFFFFF),
+                            Color(0xB8FFFFFF),
+                            Color(0xFFFFFFFF),
+                            Color(0xFFFFFFFF),
+                          ],
+                          stops: [0.0, 0.12, 0.38, 0.58, 1.0],
+                        ).createShader(bounds);
+                      },
+                      child: Image.asset(
+                        _bottomMotifAsset,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.bottomCenter,
+                        filterQuality: FilterQuality.high,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: bottomMotifHeight - motifBlendHeight,
+                height: motifBlendHeight + motifBlendLift,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          _menuSurfaceWarm.withValues(alpha: 0),
+                          _menuSurfaceWarm.withValues(alpha: 0.48),
+                          _menuSurface.withValues(alpha: 0.16),
+                          _menuSurface.withValues(alpha: 0),
+                        ],
+                        stops: const [0.0, 0.30, 0.62, 1.0],
+                      ),
                     ),
                   ),
                 ),
@@ -124,7 +167,16 @@ class AppMenuDrawer extends ConsumerWidget {
                     children: [
                       _MenuBrandHeader(scale: scale),
                       SizedBox(height: 13 * scale),
-                      _JourneyCard(scale: scale, state: counterState),
+                      _JourneyCard(
+                        scale: scale,
+                        state: counterState,
+                        onTap: () {
+                          ref
+                              .read(interactionFeedbackServiceProvider)
+                              .primaryAction();
+                          unawaited(_navigateTo(context, AppRoutes.counter));
+                        },
+                      ),
                       SizedBox(height: 10 * scale),
                       Expanded(
                         child: ListView.separated(
@@ -238,10 +290,15 @@ class _MenuBrandHeader extends StatelessWidget {
 }
 
 class _JourneyCard extends StatelessWidget {
-  const _JourneyCard({required this.scale, required this.state});
+  const _JourneyCard({
+    required this.scale,
+    required this.state,
+    required this.onTap,
+  });
 
   final double scale;
   final CounterState state;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -250,111 +307,124 @@ class _JourneyCard extends StatelessWidget {
         ? 'Sınırsız'
         : '%${(progress * 100).round()}';
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22 * scale),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22 * scale),
-            color: Colors.white.withValues(alpha: 0.54),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.82),
-              width: 0.8 * scale,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: _menuGreen.withValues(alpha: 0.06),
-                blurRadius: 18 * scale,
-                offset: Offset(0, 9 * scale),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              13 * scale,
-              10 * scale,
-              12 * scale,
-              10 * scale,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 38 * scale,
-                  height: 38 * scale,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _menuGreen.withValues(alpha: 0.10),
-                  ),
-                  child: Icon(
-                    Icons.shield_rounded,
-                    color: _menuGreen,
-                    size: 20 * scale,
-                  ),
+    final borderRadius = BorderRadius.circular(22 * scale);
+
+    return Semantics(
+      button: true,
+      label: 'Aktif zikir, ${state.activeDhikr.name}',
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Material(
+            color: Colors.transparent,
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: borderRadius,
+                color: Colors.white.withValues(alpha: 0.54),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.82),
+                  width: 0.8 * scale,
                 ),
-                SizedBox(width: 10 * scale),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                boxShadow: [
+                  BoxShadow(
+                    color: _menuGreen.withValues(alpha: 0.06),
+                    blurRadius: 18 * scale,
+                    offset: Offset(0, 9 * scale),
+                  ),
+                ],
+              ),
+              child: InkWell(
+                key: const Key('menu.activeDhikrCard'),
+                onTap: onTap,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    13 * scale,
+                    10 * scale,
+                    12 * scale,
+                    10 * scale,
+                  ),
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Aktif zikir',
+                      Container(
+                        width: 38 * scale,
+                        height: 38 * scale,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _menuGreen.withValues(alpha: 0.10),
+                        ),
+                        child: Icon(
+                          Icons.shield_rounded,
+                          color: _menuGreen,
+                          size: 20 * scale,
+                        ),
+                      ),
+                      SizedBox(width: 10 * scale),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Aktif zikir',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: _menuText,
+                                      fontSize: 12.8 * scale,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  progressLabel,
+                                  style: TextStyle(
+                                    color: _menuGreenSoft,
+                                    fontSize: state.isInfinite
+                                        ? 10.2 * scale
+                                        : 11.6 * scale,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 4 * scale),
+                            Text(
+                              key: const Key('menu.activeDhikrName'),
+                              state.activeDhikr.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: _menuText,
-                                fontSize: 12.8 * scale,
-                                fontWeight: FontWeight.w800,
+                                color: _menuMuted,
+                                fontSize: 10.8 * scale,
+                                fontWeight: FontWeight.w700,
                                 height: 1.1,
                               ),
                             ),
-                          ),
-                          Text(
-                            progressLabel,
-                            style: TextStyle(
-                              color: _menuGreenSoft,
-                              fontSize: state.isInfinite
-                                  ? 10.2 * scale
-                                  : 11.6 * scale,
-                              fontWeight: FontWeight.w800,
-                              height: 1.0,
+                            SizedBox(height: 8 * scale),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: 5 * scale,
+                                backgroundColor: _menuDivider,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  _menuGreenSoft,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 4 * scale),
-                      Text(
-                        key: const Key('menu.activeDhikrName'),
-                        state.activeDhikr.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _menuMuted,
-                          fontSize: 10.8 * scale,
-                          fontWeight: FontWeight.w700,
-                          height: 1.1,
-                        ),
-                      ),
-                      SizedBox(height: 8 * scale),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 5 * scale,
-                          backgroundColor: _menuDivider,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            _menuGreenSoft,
-                          ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -511,12 +581,12 @@ const _menuItems = [
   ),
   _MenuItemData(
     label: 'Namaz Tesbihatı',
-    icon: Icons.account_balance_rounded,
+    icon: Icons.mosque_rounded,
     route: AppRoutes.namazTesbihati,
   ),
   _MenuItemData(
     label: 'Virdler',
-    icon: Icons.self_improvement_rounded,
+    icon: Icons.repeat_rounded,
     route: AppRoutes.vird,
   ),
   _MenuItemData(

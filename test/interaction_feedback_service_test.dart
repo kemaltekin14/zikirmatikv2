@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zikirmatik_v2/core/services/interaction_feedback_service.dart';
 import 'package:zikirmatik_v2/features/settings/application/settings_controller.dart';
 
-const _feedbackChannel = MethodChannel('pro.zikirmatik.app/feedback');
+const _feedbackChannel = MethodChannel('pro.kt.zikirmatikv2/feedback');
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

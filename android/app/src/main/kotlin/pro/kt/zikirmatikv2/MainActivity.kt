@@ -1,4 +1,4 @@
-package pro.zikirmatik.app
+package pro.kt.zikirmatikv2
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -28,7 +28,7 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "pro.zikirmatik.app/feedback"
+            "pro.kt.zikirmatikv2/feedback"
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "vibrate" -> {

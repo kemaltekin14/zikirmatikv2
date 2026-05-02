@@ -9,7 +9,7 @@ class InteractionFeedbackService {
   InteractionFeedbackService(this._readSettings);
 
   static const _nativeFeedbackChannel = MethodChannel(
-    'pro.zikirmatik.app/feedback',
+    'pro.kt.zikirmatikv2/feedback',
   );
   static const _tesbihTickCooldown = Duration(milliseconds: 25);
 

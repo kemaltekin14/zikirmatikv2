@@ -22,7 +22,7 @@ import AVFoundation
 
   func configureFeedbackChannel(for controller: FlutterViewController) {
     feedbackChannel = FlutterMethodChannel(
-      name: "pro.zikirmatik.app/feedback",
+      name: "pro.kt.zikirmatikv2/feedback",
       binaryMessenger: controller.binaryMessenger
     )
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "pro.zikirmatik.app"
+    namespace = "pro.kt.zikirmatikv2"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "pro.zikirmatik.app"
+        applicationId = "pro.kt.zikirmatikv2"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
