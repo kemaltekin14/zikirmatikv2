@@ -254,8 +254,8 @@ class _PremiumTesbihPullPainter extends CustomPainter {
     if (pass == PremiumTesbihPullLayerPass.overRingStrand &&
         activeBeadIndex != null &&
         activeBeadProgress != null) {
-      final activePulledOpacity = 1.0 - _smoothStep(0.78, 0.94, pullFraction);
-      if (pullFraction >= 0.94 || activePulledOpacity <= 0) {
+      final activePulledOpacity = 1.0 - _smoothStep(0.94, 1.0, pullFraction);
+      if (pullFraction >= 0.998 || activePulledOpacity <= 0) {
         return;
       }
 

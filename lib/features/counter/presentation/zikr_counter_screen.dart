@@ -1366,12 +1366,15 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   late final AnimationController _tesbihModeController;
   late final AnimationController _pullHintController;
   late final AnimationController _pullReturnController;
+  late final AnimationController _pullCompletionController;
   final _counterDialKey = GlobalKey();
   var _beadShiftStart = 0.0;
   var _beadShiftEnd = 0.0;
   var _dragPullDistance = 0.0;
   var _pullReturnStartFraction = 0.0;
+  var _pullCompletionStartFraction = 0.0;
   var _isDraggingTesbih = false;
+  var _isCompletingTesbihPull = false;
   var _pullCompletedForGesture = false;
   var _pullHintIntroReady = false;
   var _showPullHint = false;
@@ -1404,7 +1407,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _beadShiftEnd = widget.count.toDouble();
     _beadSlideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 460),
+      duration: const Duration(milliseconds: 280),
       value: 1,
     );
     _tesbihModeController = AnimationController(
@@ -1415,10 +1418,15 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _pullHintController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 820),
-    )..repeat(reverse: true);
+    );
     _pullReturnController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 210),
+      value: 1,
+    );
+    _pullCompletionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 95),
       value: 1,
     );
   }
@@ -1436,7 +1444,9 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
         setState(() {
           _dragPullDistance = 0;
           _pullReturnStartFraction = 0;
+          _pullCompletionStartFraction = 0;
           _isDraggingTesbih = false;
+          _isCompletingTesbihPull = false;
           _pullCompletedForGesture = false;
           _activePulledBeadIndex = null;
           _activeBeadStartProgress = null;
@@ -1450,9 +1460,12 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     }
     if (oldWidget.tesbihModeEnabled != widget.tesbihModeEnabled) {
       _beadSettleGeneration++;
+      _pullCompletionController.stop();
       _dragPullDistance = 0;
       _pullReturnStartFraction = 0;
+      _pullCompletionStartFraction = 0;
       _isDraggingTesbih = false;
+      _isCompletingTesbihPull = false;
       _pullCompletedForGesture = false;
       _activePulledBeadIndex = null;
       _activeBeadStartProgress = null;
@@ -1486,6 +1499,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _beadSlideController.dispose();
     _tesbihModeController.dispose();
     _pullReturnController.dispose();
+    _pullCompletionController.dispose();
     _pullHintIntroTimer?.cancel();
     _pullHintTimer?.cancel();
     _pullHintController.dispose();
@@ -1597,6 +1611,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
                                   _beadSlideController,
                                   _tesbihModeController,
                                   _pullReturnController,
+                                  _pullCompletionController,
                                 ]),
                                 builder: (context, _) {
                                   final revealProgress = _tesbihModeController
@@ -1636,6 +1651,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
                                   _beadSlideController,
                                   _tesbihModeController,
                                   _pullReturnController,
+                                  _pullCompletionController,
                                 ]),
                                 builder: (context, _) {
                                   final revealProgress = _tesbihModeController
@@ -1844,6 +1860,16 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       (_dragPullDistance / _pullThreshold).clamp(0.0, 1.0).toDouble();
 
   double get _pullFraction {
+    if (_isCompletingTesbihPull) {
+      final completionProgress = Curves.easeOutCubic.transform(
+        _pullCompletionController.value.clamp(0.0, 1.0).toDouble(),
+      );
+      return (_pullCompletionStartFraction +
+              (1 - _pullCompletionStartFraction) * completionProgress)
+          .clamp(0.0, 1.0)
+          .toDouble();
+    }
+
     if (_isDraggingTesbih) {
       return _gesturePullFraction;
     }
@@ -1866,7 +1892,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
   double get _visualBeadShift => _currentBeadShift;
 
   double get _lowerVisualBeadShift {
-    if (_pullCompletedForGesture) {
+    if (_pullCompletedForGesture && !_isCompletingTesbihPull) {
       return _pendingBeadSettleStart ?? _currentBeadShift;
     }
 
@@ -1956,7 +1982,6 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _tesbihPointer = null;
     _lastTesbihPointerPosition = null;
     if (_pullCompletedForGesture) {
-      _releaseCompletedPullInput();
       return;
     }
     if (_isDraggingTesbih) {
@@ -1971,7 +1996,6 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _tesbihPointer = null;
     _lastTesbihPointerPosition = null;
     if (_pullCompletedForGesture) {
-      _releaseCompletedPullInput();
       return;
     }
     _cancelTesbihPull();
@@ -2036,12 +2060,16 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
 
     _beadSettleGeneration++;
     _pullReturnController.stop();
+    _pullCompletionController.stop();
     _startSonarFromDialCenter();
     setState(() {
       _dragPullDistance = 0;
       _pullReturnStartFraction = 0;
+      _pullCompletionStartFraction = 0;
       _pullReturnController.value = 1;
+      _pullCompletionController.value = 1;
       _isDraggingTesbih = true;
+      _isCompletingTesbihPull = false;
       _pullCompletedForGesture = false;
       _pendingTesbihActiveBead = null;
       _activePulledBeadIndex = activeBead.index;
@@ -2066,18 +2094,17 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     final maxStep = (30.0 * widget.scale).clamp(24.0, 36.0).toDouble();
     final resistedPull =
         math.min(effectivePull, maxStep) *
-        (1.40 + (1 - currentFraction) * 0.22);
+        (1.50 + (1 - currentFraction) * 0.25);
     final nextDistance = (_dragPullDistance + resistedPull).clamp(
       0.0,
       _pullThreshold * 1.12,
     );
     if (!_pullCompletedForGesture && nextDistance >= _pullThreshold) {
       final settleStart = _beadShiftEnd + _livePullBeadShiftSlots;
-      setState(() {
-        _dragPullDistance = _pullThreshold;
-        _pullCompletedForGesture = true;
-      });
-      _performTesbihPullIncrement(settleStart: settleStart);
+      _completeTesbihPull(
+        settleStart: settleStart,
+        startFraction: nextDistance / _pullThreshold,
+      );
       return;
     }
 
@@ -2095,17 +2122,17 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     final returnFraction = _gesturePullFraction;
     final settleStart = _beadShiftEnd + _livePullBeadShiftSlots;
     if (shouldCompletePull) {
-      setState(() {
-        _dragPullDistance = _pullThreshold;
-        _pullCompletedForGesture = true;
-      });
-      _performTesbihPullIncrement(settleStart: settleStart);
+      _completeTesbihPull(
+        settleStart: settleStart,
+        startFraction: returnFraction,
+      );
       return;
     }
 
     setState(() {
       _dragPullDistance = 0;
       _isDraggingTesbih = false;
+      _isCompletingTesbihPull = false;
       _pullCompletedForGesture = false;
       _pendingTesbihActiveBead = null;
     });
@@ -2129,6 +2156,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     setState(() {
       _dragPullDistance = 0;
       _isDraggingTesbih = false;
+      _isCompletingTesbihPull = false;
       _pullCompletedForGesture = false;
       _pendingTesbihActiveBead = null;
     });
@@ -2139,23 +2167,39 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     }
   }
 
-  void _releaseCompletedPullInput() {
-    if (!_pullCompletedForGesture) return;
+  void _completeTesbihPull({
+    required double settleStart,
+    required double startFraction,
+  }) {
+    if (_pullCompletedForGesture || _isCompletingTesbihPull) return;
 
+    final visualStart = startFraction.clamp(0.0, 0.96).toDouble();
+    _pullReturnController.stop();
+    _pullCompletionController.stop();
     setState(() {
-      _dragPullDistance = 0;
+      _dragPullDistance = _pullThreshold * visualStart;
       _pullReturnStartFraction = 0;
-      _isDraggingTesbih = false;
-      _activePulledBeadIndex = null;
-      _activeBeadStartProgress = null;
-      _activeBeadEndProgress = null;
-      _pendingTesbihActiveBead = null;
+      _pullCompletionStartFraction = visualStart;
+      _pullCompletionController.value = 0;
+      _isCompletingTesbihPull = true;
+      _pullCompletedForGesture = true;
+    });
+
+    _pullCompletionController.forward(from: 0).whenComplete(() {
+      if (!mounted || !widget.tesbihModeEnabled) return;
+      setState(() {
+        _dragPullDistance = _pullThreshold;
+        _isCompletingTesbihPull = false;
+      });
+      _performTesbihPullIncrement(settleStart: settleStart);
     });
   }
 
   void _performTesbihPullIncrement({required double settleStart}) {
     _pullReturnController.stop();
+    _pullCompletionController.stop();
     _pullReturnStartFraction = 0;
+    _pullCompletionStartFraction = 0;
     _pendingBeadSettleStart = settleStart;
     _registerPullHintProgress();
     _startSonarFromDialCenter();
@@ -2183,6 +2227,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       _pullHintCompletedPulls = 0;
       _showPullHint = false;
     });
+    _syncPullHintAnimation();
   }
 
   void _hidePullHint() {
@@ -2191,6 +2236,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _pullHintIntroReady = false;
     _pullHintCompletedPulls = 0;
     _showPullHint = false;
+    _syncPullHintAnimation();
   }
 
   void _showPullHintAfterIntro() {
@@ -2199,6 +2245,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       _pullHintIntroReady = true;
       _showPullHint = _pullHintCompletedPulls < 2;
     });
+    _syncPullHintAnimation();
   }
 
   void _registerPullHintProgress() {
@@ -2209,6 +2256,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
       _pullHintCompletedPulls = completedPulls;
       _showPullHint = completedPulls < 2;
     });
+    _syncPullHintAnimation();
 
     _pullHintTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted || !widget.tesbihModeEnabled) return;
@@ -2216,13 +2264,36 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
         _pullHintCompletedPulls = 0;
         _showPullHint = _pullHintIntroReady;
       });
+      _syncPullHintAnimation();
     });
+  }
+
+  void _syncPullHintAnimation() {
+    final shouldAnimate =
+        widget.tesbihModeEnabled &&
+        _pullHintIntroReady &&
+        _showPullHint &&
+        _pullHintCompletedPulls < 2;
+
+    if (shouldAnimate) {
+      if (!_pullHintController.isAnimating) {
+        _pullHintController.repeat(reverse: true);
+      }
+      return;
+    }
+
+    _pullHintController.stop();
+    if (_pullHintController.value != 0) {
+      _pullHintController.value = 0;
+    }
   }
 
   void _animatePullReturnFrom(double fraction) {
     _pullReturnController.stop();
+    _pullCompletionController.stop();
     setState(() {
       _pullReturnStartFraction = fraction.clamp(0.0, 1.0).toDouble();
+      _pullCompletionStartFraction = 0;
       _pullReturnController.value = 0;
     });
     _pullReturnController.forward(from: 0).whenComplete(() {
