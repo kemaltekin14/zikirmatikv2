@@ -1407,7 +1407,7 @@ class _PressableCounterDialState extends State<_PressableCounterDial>
     _beadShiftEnd = widget.count.toDouble();
     _beadSlideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 190),
+      duration: const Duration(milliseconds: 260),
       value: 1,
     );
     _tesbihModeController = AnimationController(
