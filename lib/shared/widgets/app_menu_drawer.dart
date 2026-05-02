@@ -22,7 +22,8 @@ const _menuDivider = Color(0xFFDDE4D9);
 const _wordmarkSuffixGreen = Color(0xFF828C6F);
 const _logoAsset = 'assets/images/menu_logo.png';
 const _bottomMotifAsset = 'assets/images/menu_bottom_motif.webp';
-const _cupertinoDrawerCloseNavigationDelay = Duration(milliseconds: 280);
+// Start the route change while the drawer is still finishing its close motion.
+const _cupertinoDrawerRouteStartDelay = Duration(milliseconds: 72);
 
 void openAppMenu(BuildContext context) {
   Scaffold.maybeOf(context)?.openDrawer();
@@ -546,7 +547,7 @@ Duration _drawerNavigationDelayFor(BuildContext context) {
   final platform = Theme.of(context).platform;
   return switch (platform) {
     TargetPlatform.iOS ||
-    TargetPlatform.macOS => _cupertinoDrawerCloseNavigationDelay,
+    TargetPlatform.macOS => _cupertinoDrawerRouteStartDelay,
     _ => Duration.zero,
   };
 }

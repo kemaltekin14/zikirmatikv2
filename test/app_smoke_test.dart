@@ -232,7 +232,7 @@ void main() {
     },
   );
 
-  testWidgets('cupertino menu waits for drawer close before returning home', (
+  testWidgets('cupertino menu starts navigation while drawer closes', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
@@ -250,9 +250,9 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 140));
 
-      expect(find.byType(DhikrLibraryScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 500));
       await pumpUntilFound(tester, find.byType(HomeScreen));

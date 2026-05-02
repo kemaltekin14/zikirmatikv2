@@ -31,6 +31,13 @@ class _SplashScreenState extends State<SplashScreen>
   static const _dashboardHeroImage = AssetImage(
     'assets/images/home_mosque.webp',
   );
+  static const _menuDestinationImages = <AssetImage>[
+    AssetImage('assets/images/zikir-hero.webp'),
+    AssetImage('assets/images/esma-her2.webp'),
+    AssetImage('assets/images/namaztesbihatihero.webp'),
+    AssetImage('assets/images/istatistikler-hero.webp'),
+    AssetImage('assets/images/menu_bottom_motif.webp'),
+  ];
   static const _splashDuration = Duration(milliseconds: 4650);
   static const _transitionDuration = Duration(milliseconds: 850);
 
@@ -68,6 +75,9 @@ class _SplashScreenState extends State<SplashScreen>
     precacheImage(_backgroundImage, context);
     precacheImage(_logoImage, context);
     precacheImage(_dashboardHeroImage, context);
+    for (final image in _menuDestinationImages) {
+      precacheImage(image, context);
+    }
   }
 
   @override
