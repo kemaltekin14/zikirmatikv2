@@ -139,7 +139,6 @@ class CounterController extends Notifier<CounterState> {
               'target_changed',
               parameters: {
                 'dhikr_id': _analyticsText(state.activeDhikr.id),
-                'dhikr_name': _analyticsText(state.activeDhikr.name),
                 'dhikr_category': _analyticsText(state.activeDhikr.category),
                 'previous_target_count': previousTarget,
                 'target_count': target,
@@ -396,7 +395,6 @@ class CounterController extends Notifier<CounterState> {
           eventName,
           parameters: {
             'dhikr_id': _analyticsText(dhikr.id),
-            'dhikr_name': _analyticsText(dhikr.name),
             'dhikr_category': _analyticsText(dhikr.category),
             'target_count': target,
             'count': count,

@@ -55,7 +55,6 @@ Future<void> _toggleFavoriteFromDetail(WidgetRef ref, DhikrItem item) async {
           parameters: {
             'source': 'dhikr_detail',
             'dhikr_id': _analyticsText(item.id),
-            'dhikr_name': _analyticsText(item.name),
             'dhikr_category': _analyticsText(item.category),
             'is_builtin': item.isBuiltIn,
           },

@@ -103,9 +103,6 @@ Future<bool> requestFirebasePushNotificationPermission() async {
 Future<void> _ensureFirebaseMessagingToken() async {
   try {
     await FirebaseMessaging.instance.getToken();
-    if (kDebugMode) {
-      debugPrint('FCM token hazir.');
-    }
   } on Object catch (error, stackTrace) {
     developer.log(
       'FCM token alinamadi.',

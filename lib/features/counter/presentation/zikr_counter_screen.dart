@@ -613,7 +613,6 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
             parameters: {
               'source': 'counter',
               'dhikr_id': _analyticsText(item.id),
-              'dhikr_name': _analyticsText(item.name),
               'dhikr_category': _analyticsText(item.category),
               'is_builtin': item.isBuiltIn,
             },

@@ -305,9 +305,7 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
             parameters: {
               'source': 'esma',
               'dhikr_id': 'esma-${item.number}',
-              'dhikr_name': _analyticsText(item.dhikrName),
               'dhikr_category': 'Esma-ul Husna',
-              'esma_name': _analyticsText(item.name),
               'esma_number': item.number,
               'is_builtin': true,
             },
@@ -336,10 +334,8 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
             .logEvent(
               'esma_audio_played',
               parameters: {
-                'esma_name': _analyticsText(item.name),
                 'esma_number': item.number,
                 'dhikr_id': 'esma-${item.number}',
-                'dhikr_name': _analyticsText(item.dhikrName),
                 'dhikr_category': 'Esma-ul Husna',
               },
             ),

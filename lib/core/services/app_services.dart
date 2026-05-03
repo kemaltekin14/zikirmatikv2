@@ -119,21 +119,21 @@ Map<String, Object>? _firebaseAnalyticsParameters(
 }
 
 // Keep Firebase events useful without sending religious text, custom content,
-// identifiers, exact reminder times, or prayer/counter quantities.
+// search text, notification text, or exact reminder times.
 const _blockedAnalyticsParameterKeys = {
-  'category',
-  'count',
-  'dhikr_category',
-  'dhikr_id',
   'dhikr_name',
   'esma_name',
-  'esma_number',
+  'custom_text',
+  'customText',
+  'arabic_text',
+  'arabicText',
+  'latin_text',
+  'latinText',
+  'meaning',
+  'long_meaning',
+  'longMeaning',
   'hour',
   'minute',
-  'previous_target_count',
-  'target',
-  'target_count',
-  'target_dhikr_id',
   'title',
   'body',
   'query',
@@ -141,9 +141,13 @@ const _blockedAnalyticsParameterKeys = {
 };
 
 const _allowedStringAnalyticsParameterKeys = {
+  'category',
+  'dhikr_category',
+  'dhikr_id',
   'source',
   'reminder_type',
   'repeat_type',
+  'target_dhikr_id',
 };
 
 class NoopCrashService implements CrashService {
