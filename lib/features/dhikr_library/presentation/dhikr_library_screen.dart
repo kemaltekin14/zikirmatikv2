@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/app_services.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../../shared/layout/proportional_layout.dart';
 import '../../../shared/widgets/app_menu_drawer.dart';
@@ -22,21 +24,35 @@ const _mutedGreen = Color(0xFF7F9E88);
 const _cardBackground = Color(0xFFFAFAF4);
 const _primaryText = Color(0xFF123B2B);
 const _secondaryText = Color(0xFF69766E);
+const _libraryCardBodyText = Color(0xFF52695F);
 const _gold = Color(0xFFD4BA75);
 
 const _bottomNavBaseHeight = 76.0;
 const _bottomNavBaseGap = 10.0;
 const _bottomNavMaxSafeInset = 4.0;
 const _scrollExtraBottomSpacing = 42.0;
+const _favoritePreviewLimit = 3;
 
 const _dhikrLibraryHeroAsset = 'assets/images/zikir-hero.webp';
 const _allCategory = 'Tümü';
 const _favoriteCategory = 'Favoriler';
 const _detailSheetTransitionDuration = Duration(milliseconds: 420);
+const _libraryCategoryOrder = [
+  'Tesbih',
+  'Tevhid',
+  'İstiğfar',
+  'Korunma',
+  'Esma-ül Hüsna',
+];
+const _customDhikrCategories = ['Özel', ..._libraryCategoryOrder];
 
 double _bottomNavBottomOffset(double safeBottom, double scale) {
   final visualSafeInset = math.min(safeBottom, _bottomNavMaxSafeInset * scale);
   return _bottomNavBaseGap * scale + visualSafeInset;
+}
+
+String _analyticsText(String value) {
+  return value.length > 100 ? value.substring(0, 100) : value;
 }
 
 class DhikrLibraryScreen extends ConsumerStatefulWidget {
@@ -50,9 +66,12 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   String _category = _allCategory;
+  Timer? _searchAnalyticsDebounce;
+  String? _lastLoggedSearchQuery;
 
   @override
   void dispose() {
+    _searchAnalyticsDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -104,13 +123,23 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
                       query: _query,
                       category: selectedCategory,
                     );
-                    final groupedHomeView =
-                        selectedCategory == _allCategory &&
-                        _query.trim().isEmpty;
-                    final favoriteItems = groupedHomeView
+                    final isAllCategory = selectedCategory == _allCategory;
+                    final showFavoriteSection =
+                        isAllCategory && _query.trim().isEmpty;
+                    final favoriteItems = showFavoriteSection
                         ? filtered.where((item) => item.isFavorite).toList()
                         : const <DhikrItem>[];
-                    final regularItems = filtered;
+                    final favoritePreviewItems = favoriteItems
+                        .take(_favoritePreviewLimit)
+                        .toList(growable: false);
+                    final hasMoreFavorites =
+                        favoriteItems.length > _favoritePreviewLimit;
+                    final categorySections = isAllCategory
+                        ? _groupDhikrsByCategory(
+                            filtered,
+                            categories: categories,
+                          )
+                        : const <_DhikrCategorySection>[];
 
                     return SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
@@ -129,17 +158,21 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
                                 topInset: media.padding.top,
                                 controller: _searchController,
                                 query: _query,
-                                onChanged: (value) =>
-                                    setState(() => _query = value),
+                                onChanged: _handleSearchChanged,
                                 onClear: _query.isEmpty
                                     ? null
                                     : () {
+                                        _searchAnalyticsDebounce?.cancel();
+                                        _lastLoggedSearchQuery = null;
                                         _searchController.clear();
                                         setState(() => _query = '');
                                       },
-                                onAdd: () => ref
-                                    .read(interactionFeedbackServiceProvider)
-                                    .primaryAction(),
+                                onAdd: () {
+                                  ref
+                                      .read(interactionFeedbackServiceProvider)
+                                      .primaryAction();
+                                  _showAddDhikrSheet(scale);
+                                },
                                 categories: categories,
                                 selectedCategory: selectedCategory,
                                 onSelected: (category) =>
@@ -165,24 +198,58 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
                                     leadingIcon: Icons.star_rounded,
                                     leadingColor: const Color(0xFFC39B32),
                                     detail: '${favoriteItems.length} kayıt',
-                                    actionLabel: 'Tümünü Gör',
+                                    actionLabel: hasMoreFavorites
+                                        ? 'Tümünü Gör'
+                                        : null,
+                                    onAction: hasMoreFavorites
+                                        ? () => _showAllFavoritesSheet(
+                                            scale,
+                                            favoriteItems,
+                                          )
+                                        : null,
                                     cardKeyPrefix: 'dhikr.favorite.card',
-                                    items: favoriteItems,
+                                    items: favoritePreviewItems,
                                     onOpen: _openDhikrDetail,
                                   ),
                                   SizedBox(height: 14 * scale),
                                 ],
-                                _LibraryListSection(
-                                  scale: scale,
-                                  title: groupedHomeView
-                                      ? 'Zikirler'
-                                      : selectedCategory,
-                                  detail: '${regularItems.length} kayıt',
-                                  items: regularItems,
-                                  onOpen: _openDhikrDetail,
-                                ),
-                                if (groupedHomeView &&
-                                    regularItems.isEmpty &&
+                                if (isAllCategory)
+                                  for (
+                                    var index = 0;
+                                    index < categorySections.length;
+                                    index++
+                                  ) ...[
+                                    _LibraryListSection(
+                                      scale: scale,
+                                      title: categorySections[index].title,
+                                      leadingIcon: _categoryIcon(
+                                        categorySections[index].title,
+                                      ),
+                                      leadingColor: _buttonGreen,
+                                      detail:
+                                          '${categorySections[index].items.length} kayıt',
+                                      cardKeyPrefix:
+                                          'dhikr.category.${_normalize(categorySections[index].title)}.card',
+                                      items: categorySections[index].items,
+                                      onOpen: _openDhikrDetail,
+                                    ),
+                                    if (index != categorySections.length - 1)
+                                      SizedBox(height: 14 * scale),
+                                  ]
+                                else
+                                  _LibraryListSection(
+                                    scale: scale,
+                                    title: selectedCategory,
+                                    leadingIcon: _categoryIcon(
+                                      selectedCategory,
+                                    ),
+                                    leadingColor: _buttonGreen,
+                                    detail: '${filtered.length} kayıt',
+                                    items: filtered,
+                                    onOpen: _openDhikrDetail,
+                                  ),
+                                if (isAllCategory &&
+                                    categorySections.isEmpty &&
                                     favoriteItems.isNotEmpty)
                                   Padding(
                                     padding: EdgeInsets.symmetric(
@@ -229,6 +296,45 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
         ),
       ),
     );
+  }
+
+  void _handleSearchChanged(String value) {
+    setState(() => _query = value);
+    _searchAnalyticsDebounce?.cancel();
+
+    final normalizedQuery = _normalize(value);
+    if (normalizedQuery.length < 2) {
+      return;
+    }
+
+    _searchAnalyticsDebounce = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted || _lastLoggedSearchQuery == normalizedQuery) return;
+
+      final items = ref
+          .read(dhikrItemsProvider)
+          .maybeWhen(data: (items) => items, orElse: () => const <DhikrItem>[]);
+      final resultCount = _filterDhikrs(
+        items,
+        query: value,
+        category: _category,
+      ).length;
+      _lastLoggedSearchQuery = normalizedQuery;
+
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .logEvent(
+              'search_used',
+              parameters: {
+                'source': 'dhikr_library',
+                'query_length': value.trim().length,
+                'has_results': resultCount > 0,
+                'result_count': resultCount,
+                'category': _analyticsText(_category),
+              },
+            ),
+      );
+    });
   }
 
   Future<void> _openDhikrDetail(DhikrItem item) async {
@@ -322,37 +428,35 @@ class _DhikrLibraryScreenState extends ConsumerState<DhikrLibraryScreen> {
     );
   }
 
-  Future<void> _showAddDhikrSheet(double scale) async {
-    final nameController = TextEditingController();
-    final arabicController = TextEditingController();
-    final meaningController = TextEditingController();
-    final categoryController = TextEditingController(text: 'Özel');
-    final targetController = TextEditingController(text: '33');
-    final formKey = GlobalKey<FormState>();
+  Future<void> _showAllFavoritesSheet(
+    double scale,
+    List<DhikrItem> fallbackItems,
+  ) async {
+    ref.read(interactionFeedbackServiceProvider).selection();
+    final selectedItem = await showModalBottomSheet<DhikrItem>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.18),
+      builder: (sheetContext) {
+        return _AllFavoritesSheet(scale: scale, fallbackItems: fallbackItems);
+      },
+    );
 
+    if (selectedItem == null || !mounted) return;
+    await _openDhikrDetail(selectedItem);
+  }
+
+  Future<void> _showAddDhikrSheet(double scale) async {
     final draft = await showModalBottomSheet<_CustomDhikrDraft>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.18),
       builder: (sheetContext) {
-        return _CustomDhikrSheet(
-          scale: scale,
-          formKey: formKey,
-          nameController: nameController,
-          arabicController: arabicController,
-          meaningController: meaningController,
-          categoryController: categoryController,
-          targetController: targetController,
-        );
+        return _CustomDhikrSheet(scale: scale);
       },
     );
-
-    nameController.dispose();
-    arabicController.dispose();
-    meaningController.dispose();
-    categoryController.dispose();
-    targetController.dispose();
 
     if (draft == null) return;
 
@@ -701,6 +805,7 @@ class _HeroMenuButton extends StatelessWidget {
           ],
         ),
         child: IconButton(
+          enableFeedback: false,
           tooltip: 'Menü',
           onPressed: () => openAppMenu(context),
           icon: Icon(
@@ -798,6 +903,7 @@ class _HeroAddButton extends StatelessWidget {
         color: _buttonGreen,
         borderRadius: BorderRadius.circular(20 * scale),
         child: InkWell(
+          key: const Key('dhikr.addCustom'),
           borderRadius: BorderRadius.circular(20 * scale),
           onTap: onPressed,
           child: Padding(
@@ -1091,6 +1197,7 @@ class _LibraryListSection extends StatelessWidget {
     this.leadingIcon,
     this.leadingColor,
     this.actionLabel,
+    this.onAction,
     this.cardKeyPrefix = 'dhikr.card',
   });
 
@@ -1102,6 +1209,7 @@ class _LibraryListSection extends StatelessWidget {
   final IconData? leadingIcon;
   final Color? leadingColor;
   final String? actionLabel;
+  final VoidCallback? onAction;
   final String cardKeyPrefix;
 
   @override
@@ -1116,14 +1224,15 @@ class _LibraryListSection extends StatelessWidget {
           leadingIcon: leadingIcon,
           leadingColor: leadingColor,
           actionLabel: actionLabel,
+          onAction: onAction,
         ),
-        SizedBox(height: 8 * scale),
+        SizedBox(height: 10 * scale),
         for (final item in items)
           Padding(
             padding: EdgeInsets.only(
               left: 18 * scale,
               right: 18 * scale,
-              bottom: 7 * scale,
+              bottom: 9 * scale,
             ),
             child: _DhikrLibraryCard(
               scale: scale,
@@ -1137,6 +1246,227 @@ class _LibraryListSection extends StatelessWidget {
   }
 }
 
+class _AllFavoritesSheet extends ConsumerWidget {
+  const _AllFavoritesSheet({required this.scale, required this.fallbackItems});
+
+  final double scale;
+  final List<DhikrItem> fallbackItems;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dhikrs = ref.watch(dhikrItemsProvider);
+    final favoriteItems = dhikrs.maybeWhen(
+      data: (items) => items.where((item) => item.isFavorite).toList(),
+      orElse: () => fallbackItems,
+    );
+    final sheetRadius = BorderRadius.vertical(top: Radius.circular(30 * scale));
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 16 * scale;
+    final initialSize = favoriteItems.length > 5 ? 0.82 : 0.62;
+
+    return SafeArea(
+      top: false,
+      child: DraggableScrollableSheet(
+        initialChildSize: initialSize,
+        minChildSize: 0.42,
+        maxChildSize: 0.90,
+        expand: false,
+        builder: (context, scrollController) {
+          return ClipRRect(
+            borderRadius: sheetRadius,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _pageBackground,
+                borderRadius: sheetRadius,
+              ),
+              child: ListView(
+                key: const Key('dhikr.favoriteSheet'),
+                controller: scrollController,
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  18 * scale,
+                  12 * scale,
+                  18 * scale,
+                  bottomPadding,
+                ),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42 * scale,
+                      height: 4 * scale,
+                      decoration: BoxDecoration(
+                        color: _secondaryText.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 17 * scale),
+                  _AllFavoritesSheetHeader(
+                    scale: scale,
+                    count: favoriteItems.length,
+                  ),
+                  SizedBox(height: 14 * scale),
+                  if (favoriteItems.isEmpty)
+                    _FavoriteSheetEmpty(scale: scale)
+                  else
+                    for (final item in favoriteItems)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 9 * scale),
+                        child: _DhikrLibraryCard(
+                          scale: scale,
+                          item: item,
+                          keyPrefix: 'dhikr.favoriteSheet.card',
+                          onOpen: () => Navigator.of(context).pop(item),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AllFavoritesSheetHeader extends StatelessWidget {
+  const _AllFavoritesSheetHeader({required this.scale, required this.count});
+
+  final double scale;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: _gold.withValues(alpha: 0.18),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: _gold.withValues(alpha: 0.38),
+              width: 0.8 * scale,
+            ),
+          ),
+          child: SizedBox.square(
+            dimension: 45 * scale,
+            child: Icon(
+              Icons.star_rounded,
+              color: const Color(0xFFC39B32),
+              size: 22 * scale,
+            ),
+          ),
+        ),
+        SizedBox(width: 12 * scale),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tüm Favoriler',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 21 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1.06,
+                ),
+              ),
+              SizedBox(height: 5 * scale),
+              Text(
+                'Kalbine yakın tuttuğun zikirler',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _secondaryText,
+                  fontSize: 12.2 * scale,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 10 * scale),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: _primaryGreen.withValues(alpha: 0.055),
+            borderRadius: BorderRadius.circular(14 * scale),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.66),
+              width: 0.7 * scale,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 10 * scale,
+              vertical: 7 * scale,
+            ),
+            child: Text(
+              '$count kayıt',
+              style: TextStyle(
+                color: _libraryCardBodyText,
+                fontSize: 11 * scale,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoriteSheetEmpty extends StatelessWidget {
+  const _FavoriteSheetEmpty({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _cardBackground.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24 * scale),
+        boxShadow: _softShadow(scale),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(18 * scale),
+        child: Column(
+          children: [
+            Icon(
+              Icons.star_border_rounded,
+              color: _mutedGreen,
+              size: 42 * scale,
+            ),
+            SizedBox(height: 9 * scale),
+            Text(
+              'Favori zikir yok',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 16.5 * scale,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: 6 * scale),
+            Text(
+              'Beğendiğin zikirler burada saklanır.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _secondaryText,
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w500,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LibrarySectionHeader extends StatelessWidget {
   const _LibrarySectionHeader({
     required this.scale,
@@ -1145,6 +1475,7 @@ class _LibrarySectionHeader extends StatelessWidget {
     this.leadingIcon,
     this.leadingColor,
     this.actionLabel,
+    this.onAction,
   });
 
   final double scale;
@@ -1153,6 +1484,7 @@ class _LibrarySectionHeader extends StatelessWidget {
   final IconData? leadingIcon;
   final Color? leadingColor;
   final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1175,41 +1507,69 @@ class _LibrarySectionHeader extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: _primaryText,
-                fontSize: 17 * scale,
+                fontSize: 18.2 * scale,
                 fontWeight: FontWeight.w800,
-                height: 1.1,
+                height: 1.08,
               ),
             ),
           ),
-          Text(
-            detail,
-            style: TextStyle(
-              color: _secondaryText,
-              fontSize: 11 * scale,
-              fontWeight: FontWeight.w700,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _primaryGreen.withValues(alpha: 0.055),
+              borderRadius: BorderRadius.circular(12 * scale),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 8 * scale,
+                vertical: 4.5 * scale,
+              ),
+              child: Text(
+                detail,
+                style: TextStyle(
+                  color: _libraryCardBodyText,
+                  fontSize: 10.8 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
             ),
           ),
           if (actionLabel != null) ...[
             SizedBox(width: 17 * scale),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  actionLabel!,
-                  style: TextStyle(
-                    color: _primaryGreen,
-                    fontSize: 11 * scale,
-                    fontWeight: FontWeight.w800,
-                    height: 1,
+            Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(18 * scale),
+              child: InkWell(
+                key: Key('dhikr.sectionAction.${_normalize(title)}'),
+                borderRadius: BorderRadius.circular(18 * scale),
+                onTap: onAction,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8 * scale,
+                    vertical: 6 * scale,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        actionLabel!,
+                        style: TextStyle(
+                          color: _primaryGreen,
+                          fontSize: 11 * scale,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                      SizedBox(width: 3 * scale),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: _primaryGreen,
+                        size: 15 * scale,
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(width: 3 * scale),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: _primaryGreen,
-                  size: 15 * scale,
-                ),
-              ],
+              ),
             ),
           ],
         ],
@@ -1233,7 +1593,7 @@ class _DhikrLibraryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final borderRadius = BorderRadius.circular(22 * scale);
+    final borderRadius = BorderRadius.circular(24 * scale);
     final hasArabic = item.arabicText?.trim().isNotEmpty ?? false;
     final hasMeaning = item.meaning?.trim().isNotEmpty ?? false;
 
@@ -1242,32 +1602,33 @@ class _DhikrLibraryCard extends ConsumerWidget {
         borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.028),
-            blurRadius: 12 * scale,
-            offset: Offset(0, 5 * scale),
+            color: Colors.black.withValues(alpha: 0.040),
+            blurRadius: 20 * scale,
+            offset: Offset(0, 9 * scale),
           ),
         ],
       ),
       child: Material(
-        color: _cardBackground.withValues(alpha: 0.92),
+        color: _cardBackground.withValues(alpha: 0.96),
         borderRadius: borderRadius,
         child: InkWell(
           key: Key('$keyPrefix.${item.id}'),
           borderRadius: borderRadius,
           onTap: onOpen,
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: 92 * scale),
+            constraints: BoxConstraints(minHeight: 112 * scale),
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                0,
-                11 * scale,
-                9 * scale,
-                11 * scale,
+                2 * scale,
+                14 * scale,
+                10 * scale,
+                14 * scale,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _FavoriteButton(scale: scale, item: item),
+                  SizedBox(width: 2 * scale),
                   Expanded(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1275,31 +1636,31 @@ class _DhikrLibraryCard extends ConsumerWidget {
                       children: [
                         Text(
                           item.name,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _primaryText,
-                            fontSize: 14.3 * scale,
+                            fontSize: 15.8 * scale,
                             fontWeight: FontWeight.w800,
-                            height: 1.08,
+                            height: 1.12,
                             letterSpacing: 0,
                           ),
                         ),
-                        SizedBox(height: 6 * scale),
+                        SizedBox(height: 7 * scale),
                         if (hasMeaning) ...[
                           Text(
                             item.meaning!,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: _secondaryText,
-                              fontSize: 10.2 * scale,
-                              fontWeight: FontWeight.w500,
-                              height: 1.22,
+                              color: _libraryCardBodyText,
+                              fontSize: 11.4 * scale,
+                              fontWeight: FontWeight.w600,
+                              height: 1.28,
                             ),
                           ),
                         ],
-                        SizedBox(height: 7 * scale),
+                        SizedBox(height: 9 * scale),
                         Wrap(
                           spacing: 5 * scale,
                           runSpacing: 4 * scale,
@@ -1314,9 +1675,9 @@ class _DhikrLibraryCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  SizedBox(width: 10 * scale),
+                  SizedBox(width: 8 * scale),
                   SizedBox(
-                    width: 102 * scale,
+                    width: 96 * scale,
                     child: hasArabic
                         ? Text(
                             item.arabicText!,
@@ -1344,7 +1705,7 @@ class _DhikrLibraryCard extends ConsumerWidget {
                             ),
                           ),
                   ),
-                  SizedBox(width: 8 * scale),
+                  SizedBox(width: 7 * scale),
                   _CardChevron(scale: scale),
                 ],
               ),
@@ -1367,10 +1728,10 @@ class _FavoriteButton extends ConsumerWidget {
     final iconColor = item.isFavorite ? const Color(0xFFC39B32) : _primaryGreen;
 
     return SizedBox.square(
-      dimension: 38 * scale,
+      dimension: 40 * scale,
       child: Center(
         child: SizedBox.square(
-          dimension: 25 * scale,
+          dimension: 27 * scale,
           child: Material(
             color: item.isFavorite
                 ? _gold.withValues(alpha: 0.18)
@@ -1381,6 +1742,7 @@ class _FavoriteButton extends ConsumerWidget {
               child: InkWell(
                 customBorder: const CircleBorder(),
                 onTap: () async {
+                  final isAdding = !item.isFavorite;
                   if (item.isBuiltIn) {
                     ref
                         .read(settingsControllerProvider.notifier)
@@ -1393,6 +1755,20 @@ class _FavoriteButton extends ConsumerWidget {
                           isFavorite: !item.isFavorite,
                         );
                   }
+                  unawaited(
+                    ref
+                        .read(analyticsServiceProvider)
+                        .logEvent(
+                          isAdding ? 'favorite_added' : 'favorite_removed',
+                          parameters: {
+                            'source': 'dhikr_library',
+                            'dhikr_id': _analyticsText(item.id),
+                            'dhikr_name': _analyticsText(item.name),
+                            'dhikr_category': _analyticsText(item.category),
+                            'is_builtin': item.isBuiltIn,
+                          },
+                        ),
+                  );
                   ref.read(interactionFeedbackServiceProvider).selection();
                 },
                 child: Center(
@@ -1401,7 +1777,7 @@ class _FavoriteButton extends ConsumerWidget {
                         ? Icons.star_rounded
                         : Icons.star_border_rounded,
                     color: iconColor,
-                    size: 14.5 * scale,
+                    size: 15.5 * scale,
                   ),
                 ),
               ),
@@ -1422,15 +1798,15 @@ class _CardChevron extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: _primaryGreen.withValues(alpha: 0.07),
+        color: _primaryGreen.withValues(alpha: 0.08),
         shape: BoxShape.circle,
       ),
       child: SizedBox.square(
-        dimension: 29 * scale,
+        dimension: 31 * scale,
         child: Icon(
           Icons.chevron_right_rounded,
           color: _primaryGreen,
-          size: 20 * scale,
+          size: 21 * scale,
         ),
       ),
     );
@@ -1452,26 +1828,30 @@ class _SmallTag extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: _primaryGreen.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12.5 * scale),
+        color: _primaryGreen.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(13.5 * scale),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: 7 * scale,
-          vertical: 4.2 * scale,
+          horizontal: 8 * scale,
+          vertical: 5 * scale,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: _mutedGreen, size: 11 * scale),
-            SizedBox(width: 3.5 * scale),
-            Text(
-              label,
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 9.2 * scale,
-                fontWeight: FontWeight.w700,
-                height: 1,
+            Icon(icon, color: _mutedGreen, size: 12 * scale),
+            SizedBox(width: 4 * scale),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 9.8 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
               ),
             ),
           ],
@@ -1606,27 +1986,39 @@ class _LibraryLoadState extends StatelessWidget {
   }
 }
 
-class _CustomDhikrSheet extends StatelessWidget {
-  const _CustomDhikrSheet({
-    required this.scale,
-    required this.formKey,
-    required this.nameController,
-    required this.arabicController,
-    required this.meaningController,
-    required this.categoryController,
-    required this.targetController,
-  });
+class _CustomDhikrSheet extends StatefulWidget {
+  const _CustomDhikrSheet({required this.scale});
 
   final double scale;
-  final GlobalKey<FormState> formKey;
-  final TextEditingController nameController;
-  final TextEditingController arabicController;
-  final TextEditingController meaningController;
-  final TextEditingController categoryController;
-  final TextEditingController targetController;
+
+  @override
+  State<_CustomDhikrSheet> createState() => _CustomDhikrSheetState();
+}
+
+class _CustomDhikrSheetState extends State<_CustomDhikrSheet> {
+  final _nameController = TextEditingController();
+  final _arabicController = TextEditingController();
+  final _meaningController = TextEditingController();
+  final _categoryController = TextEditingController(text: 'Özel');
+  final _targetController = TextEditingController(text: '33');
+
+  String? _nameError;
+  String? _categoryError;
+  String? _targetError;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _arabicController.dispose();
+    _meaningController.dispose();
+    _categoryController.dispose();
+    _targetController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final scale = widget.scale;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final sheetRadius = BorderRadius.vertical(top: Radius.circular(28 * scale));
 
@@ -1640,6 +2032,7 @@ class _CustomDhikrSheet extends StatelessWidget {
             borderRadius: sheetRadius,
           ),
           child: SingleChildScrollView(
+            key: const Key('dhikr.customSheet'),
             physics: const BouncingScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               22 * scale,
@@ -1647,152 +2040,155 @@ class _CustomDhikrSheet extends StatelessWidget {
               22 * scale,
               22 * scale,
             ),
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42 * scale,
-                      height: 4 * scale,
-                      decoration: BoxDecoration(
-                        color: _secondaryText.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42 * scale,
+                    height: 4 * scale,
+                    decoration: BoxDecoration(
+                      color: _secondaryText.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                  SizedBox(height: 17 * scale),
-                  Text(
-                    'Özel zikir ekle',
-                    style: TextStyle(
-                      color: _primaryText,
-                      fontSize: 22 * scale,
-                      fontWeight: FontWeight.w800,
+                ),
+                SizedBox(height: 17 * scale),
+                Text(
+                  'Özel zikir ekle',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 22 * scale,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 5 * scale),
+                Text(
+                  'Kendi zikrini kütüphaneye özel bir kart olarak ekle.',
+                  style: TextStyle(
+                    color: _secondaryText,
+                    fontSize: 12.4 * scale,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                  ),
+                ),
+                SizedBox(height: 18 * scale),
+                _SheetField(
+                  controller: _nameController,
+                  label: 'Zikir adı',
+                  icon: Icons.menu_book_rounded,
+                  autofocus: true,
+                  errorText: _nameError,
+                  onChanged: (_) {
+                    if (_nameError == null) return;
+                    setState(() => _nameError = null);
+                  },
+                ),
+                SizedBox(height: 10 * scale),
+                _SheetField(
+                  controller: _arabicController,
+                  label: 'Arapça metin (isteğe bağlı)',
+                  icon: Icons.text_fields_rounded,
+                  textDirection: TextDirection.rtl,
+                ),
+                SizedBox(height: 10 * scale),
+                _SheetField(
+                  controller: _meaningController,
+                  label: 'Anlam veya kısa not',
+                  icon: Icons.notes_rounded,
+                ),
+                SizedBox(height: 10 * scale),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: _SheetCategoryField(
+                        controller: _categoryController,
+                        errorText: _categoryError,
+                        onChanged: (_) {
+                          if (_categoryError == null) return;
+                          setState(() => _categoryError = null);
+                        },
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 5 * scale),
-                  Text(
-                    'Kendi zikrini kütüphaneye sakin bir kart olarak ekle.',
-                    style: TextStyle(
-                      color: _secondaryText,
-                      fontSize: 12.4 * scale,
-                      fontWeight: FontWeight.w500,
-                      height: 1.35,
+                    SizedBox(width: 10 * scale),
+                    Expanded(
+                      flex: 4,
+                      child: _SheetField(
+                        controller: _targetController,
+                        label: 'Hedef',
+                        icon: Icons.flag_rounded,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        errorText: _targetError,
+                        onChanged: (_) {
+                          if (_targetError == null) return;
+                          setState(() => _targetError = null);
+                        },
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 18 * scale),
-                  _SheetField(
-                    controller: nameController,
-                    label: 'Zikir adı',
-                    icon: Icons.menu_book_rounded,
-                    autofocus: true,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Zikir adı gerekli';
-                      }
-                      return null;
-                    },
-                  ),
-                  SizedBox(height: 10 * scale),
-                  _SheetField(
-                    controller: arabicController,
-                    label: 'Arapça metin',
-                    icon: Icons.text_fields_rounded,
-                    textDirection: TextDirection.rtl,
-                  ),
-                  SizedBox(height: 10 * scale),
-                  _SheetField(
-                    controller: meaningController,
-                    label: 'Anlam veya kısa not',
-                    icon: Icons.notes_rounded,
-                  ),
-                  SizedBox(height: 10 * scale),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 6,
-                        child: _SheetField(
-                          controller: categoryController,
-                          label: 'Kategori',
-                          icon: Icons.category_rounded,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Kategori gerekli';
-                            }
-                            return null;
-                          },
+                  ],
+                ),
+                SizedBox(height: 20 * scale),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text('Vazgeç'),
+                      ),
+                    ),
+                    SizedBox(width: 10 * scale),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _save,
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('Kaydet'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _buttonGreen,
+                          foregroundColor: Colors.white,
                         ),
                       ),
-                      SizedBox(width: 10 * scale),
-                      Expanded(
-                        flex: 4,
-                        child: _SheetField(
-                          controller: targetController,
-                          label: 'Hedef',
-                          icon: Icons.flag_rounded,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          validator: (value) {
-                            final parsed = int.tryParse(value ?? '');
-                            if (parsed == null || parsed < 1) {
-                              return 'Geçersiz';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20 * scale),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Vazgeç'),
-                        ),
-                      ),
-                      SizedBox(width: 10 * scale),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            if (!(formKey.currentState?.validate() ?? false)) {
-                              return;
-                            }
-                            final target =
-                                int.tryParse(targetController.text.trim()) ??
-                                33;
-                            Navigator.of(context).pop(
-                              _CustomDhikrDraft(
-                                name: nameController.text.trim(),
-                                category: categoryController.text.trim(),
-                                target: target,
-                                arabicText: _optionalText(
-                                  arabicController.text,
-                                ),
-                                meaning: _optionalText(meaningController.text),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.check_rounded),
-                          label: const Text('Kaydet'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _buttonGreen,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _save() {
+    final name = _nameController.text.trim();
+    final category = _categoryController.text.trim();
+    final target = int.tryParse(_targetController.text.trim());
+
+    setState(() {
+      _nameError = name.isEmpty ? 'Zikir adı gerekli' : null;
+      _categoryError = category.isEmpty ? 'Kategori gerekli' : null;
+      _targetError = target == null || target < 1 ? 'Geçersiz' : null;
+    });
+
+    if (_nameError != null || _categoryError != null || _targetError != null) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(
+      _CustomDhikrDraft(
+        name: name,
+        category: category,
+        target: target!,
+        arabicText: _optionalText(_arabicController.text),
+        meaning: _optionalText(_meaningController.text),
       ),
     );
   }
@@ -1807,7 +2203,8 @@ class _SheetField extends StatelessWidget {
     this.keyboardType,
     this.inputFormatters,
     this.textDirection,
-    this.validator,
+    this.errorText,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -1817,19 +2214,21 @@ class _SheetField extends StatelessWidget {
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final TextDirection? textDirection;
-  final FormFieldValidator<String>? validator;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
+    return TextField(
       controller: controller,
       autofocus: autofocus,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       textDirection: textDirection,
-      validator: validator,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
+        errorText: errorText,
         prefixIcon: Icon(icon),
         filled: true,
         fillColor: _cardBackground.withValues(alpha: 0.92),
@@ -1847,6 +2246,230 @@ class _SheetField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(color: _buttonGreen, width: 1.2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetCategoryField extends StatelessWidget {
+  const _SheetCategoryField({
+    required this.controller,
+    this.errorText,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: const Key('dhikr.categoryField'),
+      controller: controller,
+      readOnly: true,
+      enableInteractiveSelection: false,
+      onTap: () async {
+        FocusScope.of(context).unfocus();
+        final selectedCategory = await showModalBottomSheet<String>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          barrierColor: Colors.black.withValues(alpha: 0.18),
+          builder: (sheetContext) {
+            final media = MediaQuery.of(sheetContext);
+            return _SheetCategoryPicker(
+              scale: proportionalLayoutScaleFor(media.size.width),
+              selectedCategory: controller.text.trim(),
+            );
+          },
+        );
+        if (selectedCategory == null) return;
+        controller.text = selectedCategory;
+        onChanged?.call(selectedCategory);
+      },
+      decoration: InputDecoration(
+        labelText: 'Kategori',
+        errorText: errorText,
+        prefixIcon: const Icon(Icons.category_rounded),
+        suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
+        filled: true,
+        fillColor: _cardBackground.withValues(alpha: 0.92),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: Colors.white.withValues(alpha: 0.70),
+            width: 0.8,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: _buttonGreen, width: 1.2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetCategoryPicker extends StatelessWidget {
+  const _SheetCategoryPicker({
+    required this.scale,
+    required this.selectedCategory,
+  });
+
+  final double scale;
+  final String selectedCategory;
+
+  @override
+  Widget build(BuildContext context) {
+    final sheetRadius = BorderRadius.vertical(top: Radius.circular(28 * scale));
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 16 * scale;
+
+    return SafeArea(
+      top: false,
+      child: ClipRRect(
+        borderRadius: sheetRadius,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _pageBackground,
+            borderRadius: sheetRadius,
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              18 * scale,
+              12 * scale,
+              18 * scale,
+              bottomPadding,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42 * scale,
+                    height: 4 * scale,
+                    decoration: BoxDecoration(
+                      color: _secondaryText.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 17 * scale),
+                Text(
+                  'Kategori seç',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 20 * scale,
+                    fontWeight: FontWeight.w800,
+                    height: 1.08,
+                  ),
+                ),
+                SizedBox(height: 5 * scale),
+                Text(
+                  'Zikrinin kütüphanede hangi başlık altında görüneceğini seç.',
+                  style: TextStyle(
+                    color: _secondaryText,
+                    fontSize: 12.2 * scale,
+                    fontWeight: FontWeight.w500,
+                    height: 1.34,
+                  ),
+                ),
+                SizedBox(height: 15 * scale),
+                Wrap(
+                  spacing: 8 * scale,
+                  runSpacing: 8 * scale,
+                  children: [
+                    for (final category in _customDhikrCategories)
+                      _SheetCategoryOption(
+                        scale: scale,
+                        label: category,
+                        selected: category == selectedCategory,
+                        onTap: () => Navigator.of(context).pop(category),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetCategoryOption extends StatelessWidget {
+  const _SheetCategoryOption({
+    required this.scale,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final double scale;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(17 * scale);
+
+    return Material(
+      color: selected ? _buttonGreen : _cardBackground.withValues(alpha: 0.92),
+      borderRadius: radius,
+      child: InkWell(
+        key: Key('dhikr.categoryOption.${_normalize(label)}'),
+        borderRadius: radius,
+        onTap: onTap,
+        child: Container(
+          constraints: BoxConstraints(minWidth: 96 * scale),
+          padding: EdgeInsets.symmetric(
+            horizontal: 12 * scale,
+            vertical: 10 * scale,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(
+              color: selected
+                  ? _gold.withValues(alpha: 0.60)
+                  : Colors.white.withValues(alpha: 0.72),
+              width: 0.8 * scale,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: selected ? 0.055 : 0.025),
+                blurRadius: selected ? 14 * scale : 8 * scale,
+                offset: Offset(0, selected ? 6 * scale : 3 * scale),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                selected ? Icons.check_rounded : _categoryIcon(label),
+                color: selected ? Colors.white : _mutedGreen,
+                size: 16 * scale,
+              ),
+              SizedBox(width: 6 * scale),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? Colors.white : _primaryText,
+                  fontSize: 12.6 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1899,8 +2522,17 @@ List<String> _categoriesFor(List<DhikrItem> items) {
     values.add(item.category);
     hasFavorite = hasFavorite || item.isFavorite;
   }
-  final categories = values.toList()..sort();
-  return [_allCategory, if (hasFavorite) _favoriteCategory, ...categories];
+  final orderedCategories = [
+    for (final category in _libraryCategoryOrder)
+      if (values.contains(category)) category,
+    for (final category in values.toList()..sort())
+      if (!_libraryCategoryOrder.contains(category)) category,
+  ];
+  return [
+    _allCategory,
+    if (hasFavorite) _favoriteCategory,
+    ...orderedCategories,
+  ];
 }
 
 List<DhikrItem> _filterDhikrs(
@@ -1923,6 +2555,38 @@ List<DhikrItem> _filterDhikrs(
     return matchesCategory && matchesQuery;
   }).toList();
   return filtered;
+}
+
+class _DhikrCategorySection {
+  const _DhikrCategorySection({required this.title, required this.items});
+
+  final String title;
+  final List<DhikrItem> items;
+}
+
+List<_DhikrCategorySection> _groupDhikrsByCategory(
+  List<DhikrItem> items, {
+  required List<String> categories,
+}) {
+  final grouped = <String, List<DhikrItem>>{};
+  for (final item in items) {
+    grouped.putIfAbsent(item.category, () => <DhikrItem>[]).add(item);
+  }
+
+  final orderedCategories = [
+    for (final category in categories)
+      if (category != _allCategory &&
+          category != _favoriteCategory &&
+          grouped.containsKey(category))
+        category,
+    for (final category in grouped.keys)
+      if (!categories.contains(category)) category,
+  ];
+
+  return [
+    for (final category in orderedCategories)
+      _DhikrCategorySection(title: category, items: grouped[category]!),
+  ];
 }
 
 String _normalize(String value) {

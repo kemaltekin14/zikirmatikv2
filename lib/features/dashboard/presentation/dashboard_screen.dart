@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/router/app_router.dart';
 import '../../../core/data/local/app_database.dart';
@@ -15,8 +17,15 @@ import '../../counter/application/counter_controller.dart';
 import '../../dhikr_library/application/dhikr_providers.dart';
 import '../../dhikr_library/data/builtin_dhikrs.dart';
 import '../../dhikr_library/domain/dhikr_item.dart';
+import '../../dhikr_library/presentation/dhikr_detail_screen.dart';
+import '../../esma/data/esma_data.dart';
+import '../../esma/domain/esma_item.dart';
+import '../../reminders/application/local_notification_service.dart';
+import '../../reminders/application/reminder_providers.dart';
 import '../../../shared/layout/proportional_layout.dart';
 import '../../../shared/widgets/app_menu_drawer.dart';
+import '../../../shared/widgets/app_time_picker.dart';
+import '../../../shared/widgets/notification_permission_prompt.dart';
 
 const _pageBackground = Color(0xFFE9EEE4);
 const _primaryGreen = Color(0xFF13472F);
@@ -28,6 +37,8 @@ const _primaryText = Color(0xFF123B2B);
 const _secondaryText = Color(0xFF69766E);
 const _brandWordmarkGreen = Color(0xFF114B35);
 const _brandWordmarkSuffixGreen = Color(0xFF828C6F);
+const _goalGold = Color(0xFFD4BA75);
+const _goalMint = Color(0xFFBEE1CB);
 
 const _homeQuoteBaseHeight = 72.0;
 const _homeQuoteBaseWidth = 224.0;
@@ -38,6 +49,9 @@ const _homeBottomNavMaxSafeInset = 4.0;
 const _homeScrollBottomSpacing = 12.0;
 const _todayEsmaCardBackgroundAsset =
     'assets/images/today_esma_card_background.png';
+const _statisticsDailyTargetKey = 'statistics.target.daily';
+const _statisticsMonthlyTargetKey = 'statistics.target.monthly';
+const _statisticsYearlyTargetKey = 'statistics.target.yearly';
 
 double _homeBottomNavBottomOffset(double safeBottom, double scale) {
   final visualSafeInset = math.min(
@@ -47,8 +61,64 @@ double _homeBottomNavBottomOffset(double safeBottom, double scale) {
   return _homeBottomNavBaseGap * scale + visualSafeInset;
 }
 
-class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+EsmaItem _todayEsmaItem(DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  final startDay = DateTime(2024);
+  final dayIndex = today.difference(startDay).inDays;
+  return esmaItems[dayIndex % esmaItems.length];
+}
+
+Duration _delayUntilNextLocalDay(DateTime now) {
+  final tomorrow = DateTime(now.year, now.month, now.day + 1);
+  return tomorrow.difference(now) + const Duration(seconds: 1);
+}
+
+final _todayEsmaProvider = StreamProvider.autoDispose<EsmaItem>((ref) {
+  final controller = StreamController<EsmaItem>();
+  Timer? timer;
+
+  void publishToday() {
+    final now = DateTime.now();
+    controller.add(_todayEsmaItem(now));
+    timer?.cancel();
+    timer = Timer(_delayUntilNextLocalDay(now), publishToday);
+  }
+
+  publishToday();
+
+  ref.onDispose(() {
+    timer?.cancel();
+    controller.close();
+  });
+
+  return controller.stream;
+});
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key, this.showStartupNotificationPrompt = true});
+
+  final bool showStartupNotificationPrompt;
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.showStartupNotificationPrompt) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      if (!mounted) {
+        return;
+      }
+      await maybeShowStartupNotificationPermissionSheet(context: context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -372,6 +442,7 @@ class _CircleActionButton extends StatelessWidget {
         ],
       ),
       child: IconButton(
+        enableFeedback: false,
         onPressed: onPressed,
         icon: Icon(icon, color: _primaryGreen, size: iconSize),
       ),
@@ -456,6 +527,9 @@ class TodayZikrCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final todayEsma =
+        ref.watch(_todayEsmaProvider).value ?? _todayEsmaItem(DateTime.now());
+
     return _TodayEsmaCardSurface(
       height: 238 * scale,
       radius: 20 * scale,
@@ -490,8 +564,10 @@ class TodayZikrCard extends ConsumerWidget {
                       EsmaSeal(size: 88 * scale, scale: scale),
                       SizedBox(height: 7 * scale),
                       Text(
-                        'El-Vekîl',
+                        todayEsma.name,
                         textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _primaryGreen,
                           fontSize: 16.4 * scale,
@@ -501,8 +577,10 @@ class TodayZikrCard extends ConsumerWidget {
                       ),
                       SizedBox(height: 4 * scale),
                       Text(
-                        'Her şeyi vekil edinen,\ngüvenilir olan.',
+                        todayEsma.meaning,
                         textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _primaryText,
                           fontSize: 11.2 * scale,
@@ -524,7 +602,7 @@ class TodayZikrCard extends ConsumerWidget {
             icon: Icons.auto_awesome_rounded,
             onPressed: () {
               final feedback = ref.read(interactionFeedbackServiceProvider);
-              context.push(AppRoutes.esma);
+              context.push('${AppRoutes.esma}?number=${todayEsma.number}');
               feedback.selection();
             },
           ),
@@ -1390,13 +1468,12 @@ class ContinueZikrCard extends ConsumerWidget {
     final storedHistoryEntries = ref
         .watch(_dashboardHistoryProvider)
         .maybeWhen(
-          data: (entries) => entries.isEmpty ? _sampleHistoryEntries : entries,
-          orElse: () => _sampleHistoryEntries,
+          data: (entries) => entries,
+          orElse: () => const <_HistoryEntry>[],
         );
     final historyEntries = _historyEntriesWithActiveCounter(
       storedHistoryEntries,
       ref.watch(counterControllerProvider),
-      hasRememberedDhikr: ref.watch(lastStartedDhikrIdProvider) != null,
     );
     final visibleEntries = historyEntries.take(3).toList();
     final feedback = ref.read(interactionFeedbackServiceProvider);
@@ -1420,6 +1497,7 @@ class ContinueZikrCard extends ConsumerWidget {
             dhikr,
             target: entry.target,
             initialCount: entry.completed ? 0 : entry.count,
+            sessionId: entry.completed ? null : entry.sessionId,
           );
       context.push(AppRoutes.counter);
       feedback.primaryAction();
@@ -1468,17 +1546,21 @@ class ContinueZikrCard extends ConsumerWidget {
                   ),
                 ),
               ),
-              _HistorySeeAllButton(scale: scale, onTap: showAllHistory),
+              if (historyEntries.isNotEmpty)
+                _HistorySeeAllButton(scale: scale, onTap: showAllHistory),
             ],
           ),
           SizedBox(height: 7 * scale),
-          for (var index = 0; index < visibleEntries.length; index++)
-            _HistoryRow(
-              scale: scale,
-              entry: visibleEntries[index],
-              showDivider: index != visibleEntries.length - 1,
-              onTap: () => openHistoryEntry(visibleEntries[index]),
-            ),
+          if (visibleEntries.isEmpty)
+            _HistoryEmptyState(scale: scale)
+          else
+            for (var index = 0; index < visibleEntries.length; index++)
+              _HistoryRow(
+                scale: scale,
+                entry: visibleEntries[index],
+                showDivider: index != visibleEntries.length - 1,
+                onTap: () => openHistoryEntry(visibleEntries[index]),
+              ),
         ],
       ),
     );
@@ -1489,12 +1571,13 @@ final _dashboardHistoryProvider =
     StreamProvider.autoDispose<List<_HistoryEntry>>((ref) {
       return ref
           .watch(appDatabaseProvider)
-          .watchCounterEvents()
-          .map(_historyEntriesFromEvents);
+          .watchCounterSessions()
+          .map(_historyEntriesFromSessions);
     });
 
 class _HistoryEntry {
   const _HistoryEntry({
+    required this.sessionId,
     required this.dhikrId,
     required this.title,
     required this.count,
@@ -1505,6 +1588,7 @@ class _HistoryEntry {
     this.paused = false,
   });
 
+  final String sessionId;
   final String dhikrId;
   final String title;
   final int count;
@@ -1523,53 +1607,23 @@ class _HistoryEntry {
   String get statusLabel => completed ? 'Tamamlandı' : 'Devam ediyor';
 }
 
-List<_HistoryEntry> _historyEntriesFromEvents(List<CounterEvent> events) {
-  final orderedEvents = [...events]
-    ..sort((a, b) {
-      final dateComparison = b.createdAt.compareTo(a.createdAt);
-      if (dateComparison != 0) return dateComparison;
-      return b.countAfter.compareTo(a.countAfter);
-    });
-  final currentOpenEntries = <String, _HistoryEntry>{};
-  final currentStateResolved = <String>{};
-  final completedEntries = <_HistoryEntry>[];
-
-  for (final event in orderedEvents) {
-    final completed =
-        event.target > 0 &&
-        (event.eventType == 'completed' || event.countAfter >= event.target);
-
-    if (completed) {
-      completedEntries.add(
+List<_HistoryEntry> _historyEntriesFromSessions(List<CounterSession> sessions) {
+  final entries = [
+    for (final session in sessions)
+      if (session.count > 0)
         _HistoryEntry(
-          dhikrId: event.dhikrId,
-          title: event.dhikrName,
-          count: event.target,
-          target: event.target,
-          completed: true,
-          updatedAt: event.createdAt,
+          sessionId: session.id,
+          dhikrId: session.dhikrId,
+          title: session.dhikrName,
+          count: session.target > 0 && session.count >= session.target
+              ? session.target
+              : session.count,
+          target: session.target,
+          completed:
+              session.status == 'completed' ||
+              (session.target > 0 && session.count >= session.target),
+          updatedAt: session.completedAt ?? session.updatedAt,
         ),
-      );
-    }
-
-    if (currentStateResolved.add(event.dhikrId)) {
-      final isOpen = event.countAfter > 0 && !completed;
-      if (isOpen) {
-        currentOpenEntries[event.dhikrId] = _HistoryEntry(
-          dhikrId: event.dhikrId,
-          title: event.dhikrName,
-          count: event.countAfter,
-          target: event.target,
-          completed: false,
-          updatedAt: event.createdAt,
-        );
-      }
-    }
-  }
-
-  final entries = <_HistoryEntry>[
-    ...currentOpenEntries.values,
-    ...completedEntries,
   ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
   return entries;
@@ -1577,12 +1631,12 @@ List<_HistoryEntry> _historyEntriesFromEvents(List<CounterEvent> events) {
 
 List<_HistoryEntry> _historyEntriesWithActiveCounter(
   List<_HistoryEntry> entries,
-  CounterState counter, {
-  required bool hasRememberedDhikr,
-}) {
-  if (counter.count <= 0 && !hasRememberedDhikr) return entries;
+  CounterState counter,
+) {
+  if (counter.count <= 0) return entries;
 
   final activeEntry = _HistoryEntry(
+    sessionId: counter.sessionId,
     dhikrId: counter.activeDhikr.id,
     title: counter.activeDhikr.name,
     count: counter.count,
@@ -1591,11 +1645,24 @@ List<_HistoryEntry> _historyEntriesWithActiveCounter(
     updatedAt: DateTime.now(),
     active: true,
   );
+  final activeAlreadyStoredAsCompleted =
+      activeEntry.completed &&
+      entries.any(
+        (entry) =>
+            entry.completed &&
+            entry.sessionId == activeEntry.sessionId &&
+            entry.dhikrId == activeEntry.dhikrId &&
+            entry.count == activeEntry.count &&
+            entry.target == activeEntry.target,
+      );
 
   final mergedEntries = [
-    activeEntry,
+    if (!activeAlreadyStoredAsCompleted) activeEntry,
     for (final entry in entries)
-      if (!(entry.dhikrId == activeEntry.dhikrId && !entry.completed)) entry,
+      if (!(!activeAlreadyStoredAsCompleted &&
+          entry.sessionId == activeEntry.sessionId &&
+          !entry.completed))
+        entry,
   ];
 
   return [
@@ -1604,6 +1671,7 @@ List<_HistoryEntry> _historyEntriesWithActiveCounter(
         entry
       else
         _HistoryEntry(
+          sessionId: entry.sessionId,
           dhikrId: entry.dhikrId,
           title: entry.title,
           count: entry.count,
@@ -1615,33 +1683,97 @@ List<_HistoryEntry> _historyEntriesWithActiveCounter(
   ];
 }
 
-List<_HistoryEntry> get _sampleHistoryEntries {
-  return [
-    _HistoryEntry(
-      dhikrId: 'subhanallah',
-      title: 'Subhanallah',
-      count: 33,
-      target: 100,
-      completed: false,
-      updatedAt: DateTime(2026),
-    ),
-    _HistoryEntry(
-      dhikrId: 'elhamdulillah',
-      title: 'Elhamdulillah',
-      count: 33,
-      target: 33,
-      completed: true,
-      updatedAt: DateTime(2026),
-    ),
-    _HistoryEntry(
-      dhikrId: 'allahu-ekber',
-      title: 'Allahu Ekber',
-      count: 99,
-      target: 99,
-      completed: true,
-      updatedAt: DateTime(2026),
-    ),
-  ];
+_HistoryEntry? _ongoingEntryFromCounter(CounterState counter) {
+  if (counter.count <= 0) return null;
+  if (!counter.isInfinite && counter.count >= counter.target) return null;
+
+  return _HistoryEntry(
+    sessionId: counter.sessionId,
+    dhikrId: counter.activeDhikr.id,
+    title: counter.activeDhikr.name,
+    count: counter.count,
+    target: counter.target,
+    completed: false,
+    updatedAt: DateTime.now(),
+    active: true,
+  );
+}
+
+_HistoryEntry? _latestOngoingHistoryEntry(List<_HistoryEntry> entries) {
+  final ongoingEntries = entries.where(_isOngoingHistoryEntry).toList()
+    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  return ongoingEntries.isEmpty ? null : ongoingEntries.first;
+}
+
+bool _isOngoingHistoryEntry(_HistoryEntry entry) {
+  if (entry.completed || entry.count <= 0) return false;
+  return entry.target <= 0 || entry.count < entry.target;
+}
+
+DhikrItem _defaultQuickStartDhikr(List<DhikrItem> dhikrs) {
+  return _dhikrById(dhikrs, 'estagfirullah') ??
+      _dhikrById(builtinDhikrs, 'estagfirullah') ??
+      builtinDhikrs.first;
+}
+
+class _HistoryEmptyState extends StatelessWidget {
+  const _HistoryEmptyState({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _primaryGreen.withValues(alpha: 0.045),
+          borderRadius: BorderRadius.circular(18 * scale),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.64),
+            width: 0.7 * scale,
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 12 * scale,
+            vertical: 11 * scale,
+          ),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _buttonGreen.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox.square(
+                  dimension: 36 * scale,
+                  child: Icon(
+                    Icons.spa_rounded,
+                    color: _primaryGreen,
+                    size: 18 * scale,
+                  ),
+                ),
+              ),
+              SizedBox(width: 11 * scale),
+              Expanded(
+                child: Text(
+                  'Henüz gerçek zikir kaydı yok.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _secondaryText,
+                    fontSize: 11.2 * scale,
+                    fontWeight: FontWeight.w700,
+                    height: 1.18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HistorySeeAllButton extends StatelessWidget {
@@ -2042,24 +2174,124 @@ class _HistoryProgressStrip extends StatelessWidget {
   }
 }
 
-class CategoryZikrSection extends StatelessWidget {
+class CategoryZikrSection extends ConsumerWidget {
   const CategoryZikrSection({super.key, required this.scale});
 
   final double scale;
 
   static const _items = [
-    _CategoryItem('Rızık &\nBereket', Icons.eco_rounded),
-    _CategoryItem('Şifa &\nSağlık', Icons.health_and_safety_rounded),
-    _CategoryItem('Huzur &\nİç Sükun', Icons.spa_rounded),
-    _CategoryItem('Şükran &\nHamd', Icons.volunteer_activism_rounded),
-    _CategoryItem('İlişkiler &\nSevgi', Icons.favorite_rounded),
-    _CategoryItem('Tövbe &\nMağfiret', Icons.restart_alt_rounded),
-    _CategoryItem('Hidayet &\nİlim', Icons.school_rounded),
-    _CategoryItem('Koruma &\nMuhafaza', Icons.shield_rounded),
+    _CategoryItem(
+      label: 'Rızık &\nBereket',
+      title: 'Rızık & Bereket',
+      icon: Icons.eco_rounded,
+      description: 'Temiz rızık, kapıların açılması ve genişlik niyeti.',
+      esmaNumbers: [16, 17, 18, 21, 39, 42, 45, 88, 89],
+      dhikrIds: [
+        'allahumme-ilmen-rizqan-amalan',
+        'rabbena-atina',
+        'la-havle',
+        'la-ilahe-illallah-vahdehu',
+      ],
+    ),
+    _CategoryItem(
+      label: 'Şifa &\nSağlık',
+      title: 'Şifa & Sağlık',
+      icon: Icons.health_and_safety_rounded,
+      description: 'Afiyet, iyileşme ve kalbin güçlenmesi niyeti.',
+      esmaNumbers: [1, 2, 5, 30, 39, 55, 62, 63, 92],
+      dhikrIds: [
+        'allahumme-rabben-nas-ishfi',
+        'eselullahal-azim-yashfik',
+        'ya-hayyu-ya-kayyum',
+      ],
+    ),
+    _CategoryItem(
+      label: 'Huzur &\nİç Sükun',
+      title: 'Huzur & İç Sükun',
+      icon: Icons.spa_rounded,
+      description: 'Kalbin yatışması, tevekkül ve iç ferahlık niyeti.',
+      esmaNumbers: [4, 5, 32, 52, 55, 62, 63, 68, 93, 96, 99],
+      dhikrIds: [
+        'la-havle',
+        'hasbiyallah',
+        'ya-hayyu-ya-kayyum',
+        'subhanallahil-azim',
+      ],
+    ),
+    _CategoryItem(
+      label: 'Şükran &\nHamd',
+      title: 'Şükran & Hamd',
+      icon: Icons.volunteer_activism_rounded,
+      description: 'Nimeti hatırlama, hamd ve tesbih niyeti.',
+      esmaNumbers: [35, 42, 56, 79, 83, 85],
+      dhikrIds: [
+        'elhamdulillah',
+        'subhanallahi-ve-bihamdihi',
+        'subhanallahi-bihamdihi-adede-halkihi',
+        'subhanallahil-azim',
+        'la-ilahe-illallah-vahdehu',
+      ],
+    ),
+    _CategoryItem(
+      label: 'İlişkiler &\nSevgi',
+      title: 'İlişkiler & Sevgi',
+      icon: Icons.favorite_rounded,
+      description: 'Merhamet, muhabbet, aile huzuru ve gönül birliği niyeti.',
+      esmaNumbers: [1, 2, 30, 32, 47, 55, 79, 83, 87],
+      dhikrIds: [
+        'rabbena-hablana-min-azwajina',
+        'allahumme-salli',
+        'rabbigfir-li-ve-tub-aleyye',
+      ],
+    ),
+    _CategoryItem(
+      label: 'Tövbe &\nMağfiret',
+      title: 'Tövbe & Mağfiret',
+      icon: Icons.restart_alt_rounded,
+      description: 'Arınma, bağışlanma ve yeniden yöneliş niyeti.',
+      esmaNumbers: [1, 2, 14, 34, 44, 80, 82],
+      dhikrIds: [
+        'estagfirullah',
+        'estagfirullah-el-azim',
+        'seyyidul-istigfar',
+        'rabbigfir-li-ve-tub-aleyye',
+        'allahumme-inneke-afuvvun',
+        'rabbena-zalemna',
+        'yunus-duasi',
+      ],
+    ),
+    _CategoryItem(
+      label: 'Hidayet &\nİlim',
+      title: 'Hidayet & İlim',
+      icon: Icons.school_rounded,
+      description: 'Faydalı ilim, doğru yol ve hikmetli karar niyeti.',
+      esmaNumbers: [19, 26, 27, 28, 29, 31, 40, 46, 50, 51, 57, 94, 98],
+      dhikrIds: [
+        'rabbi-zidni-ilma',
+        'allahumme-ilmen-rizqan-amalan',
+        'ihdinas-siratal-mustakim',
+        'rabbi-shrah-li-sadri',
+      ],
+    ),
+    _CategoryItem(
+      label: 'Koruma &\nMuhafaza',
+      title: 'Koruma & Muhafaza',
+      icon: Icons.shield_rounded,
+      description: 'Sığınma, emniyet ve muhafaza niyeti.',
+      esmaNumbers: [6, 7, 38, 43, 52, 53, 54, 55, 90],
+      dhikrIds: [
+        'hasbunallah',
+        'hasbiyallah',
+        'bismillah-alladhi-la-yadurru',
+        'audhu-bikalimatillah',
+        'muawwidhat-after-prayer',
+        'la-havle',
+      ],
+    ),
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
         Padding(
@@ -2082,14 +2314,1095 @@ class CategoryZikrSection extends StatelessWidget {
         ),
         SizedBox(height: 16 * scale),
         SizedBox(
-          height: 106 * scale,
+          height: 116 * scale,
           child: ListView.separated(
-            padding: EdgeInsets.symmetric(horizontal: 18 * scale),
+            clipBehavior: Clip.none,
+            padding: EdgeInsets.fromLTRB(
+              18 * scale,
+              2 * scale,
+              18 * scale,
+              14 * scale,
+            ),
             scrollDirection: Axis.horizontal,
-            itemBuilder: (context, index) =>
-                _CategoryCard(scale: scale, item: _items[index]),
+            itemBuilder: (context, index) {
+              final item = _items[index];
+              return _CategoryCard(
+                scale: scale,
+                item: item,
+                onTap: () => _showCategorySheet(context, ref, item),
+              );
+            },
             separatorBuilder: (context, index) => SizedBox(width: 12 * scale),
             itemCount: _items.length,
+          ),
+        ),
+        SizedBox(height: 14 * scale),
+        _DashboardGoalProgressCard(scale: scale),
+      ],
+    );
+  }
+
+  void _showCategorySheet(
+    BuildContext context,
+    WidgetRef ref,
+    _CategoryItem item,
+  ) {
+    ref.read(interactionFeedbackServiceProvider).selection();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.20),
+      builder: (sheetContext) {
+        return _CategoryDhikrSheet(
+          scale: scale,
+          item: item,
+          onOpenDhikr: (dhikr) {
+            Navigator.of(sheetContext).pop();
+            Future<void>.delayed(const Duration(milliseconds: 140), () {
+              if (!context.mounted) return;
+              unawaited(_showHomeDhikrDetail(context, ref, dhikr));
+            });
+          },
+        );
+      },
+    );
+  }
+}
+
+final _dashboardGoalBucketsProvider =
+    StreamProvider.autoDispose<List<CounterStatBucket>>((ref) {
+      return ref.watch(appDatabaseProvider).watchCounterStatBuckets();
+    });
+
+final _dashboardGoalTargetsProvider =
+    FutureProvider.autoDispose<_DashboardGoalTargets>((ref) async {
+      final prefs = await SharedPreferences.getInstance();
+      return _DashboardGoalTargets(
+        daily: _readDashboardTargetPreference(prefs, _statisticsDailyTargetKey),
+        monthly: _readDashboardTargetPreference(
+          prefs,
+          _statisticsMonthlyTargetKey,
+        ),
+        yearly: _readDashboardTargetPreference(
+          prefs,
+          _statisticsYearlyTargetKey,
+        ),
+      );
+    });
+
+class _DashboardGoalProgressCard extends ConsumerWidget {
+  const _DashboardGoalProgressCard({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final buckets = ref
+        .watch(_dashboardGoalBucketsProvider)
+        .maybeWhen(
+          data: (items) => items,
+          orElse: () => const <CounterStatBucket>[],
+        );
+    final targetsAsync = ref.watch(_dashboardGoalTargetsProvider);
+    final targets = targetsAsync.maybeWhen(
+      data: (value) => value,
+      orElse: () => const _DashboardGoalTargets(),
+    );
+    final targetsLoaded = targetsAsync.maybeWhen(
+      data: (_) => true,
+      orElse: () => false,
+    );
+    final snapshot = _DashboardGoalSnapshot.fromBuckets(
+      buckets,
+      targets,
+      DateTime.now(),
+    );
+    final focusProgress = snapshot.daily.hasTarget
+        ? snapshot.daily
+        : snapshot.monthly;
+    final feedback = ref.read(interactionFeedbackServiceProvider);
+    const actionLabel = 'Ayarla';
+
+    void openStatistics() {
+      feedback.selection();
+      context.push(AppRoutes.statistics).whenComplete(() {
+        if (context.mounted) {
+          ref.invalidate(_dashboardGoalTargetsProvider);
+        }
+      });
+    }
+
+    Future<void> openTargetEditor() async {
+      if (!targetsLoaded) return;
+      feedback.selection();
+      final previousDailyTarget = targets.daily;
+      final updatedTargets = await showModalBottomSheet<_DashboardGoalTargets>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          return _DashboardGoalTargetSheet(scale: scale, targets: targets);
+        },
+      );
+      if (updatedTargets == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      await _writeDashboardTargetPreference(
+        prefs,
+        _statisticsDailyTargetKey,
+        updatedTargets.daily,
+      );
+      await _writeDashboardTargetPreference(
+        prefs,
+        _statisticsMonthlyTargetKey,
+        updatedTargets.monthly,
+      );
+      await _writeDashboardTargetPreference(
+        prefs,
+        _statisticsYearlyTargetKey,
+        updatedTargets.yearly,
+      );
+
+      if (context.mounted) {
+        ref.invalidate(_dashboardGoalTargetsProvider);
+      }
+
+      final dailyTarget = updatedTargets.daily;
+      if (dailyTarget == null ||
+          dailyTarget == previousDailyTarget ||
+          !context.mounted) {
+        return;
+      }
+
+      await _offerDashboardDailyTargetReminder(
+        context: context,
+        ref: ref,
+        dailyTarget: dailyTarget,
+      );
+    }
+
+    void handleCardTap() {
+      if (targetsLoaded && targets.hasAny) {
+        openStatistics();
+      } else {
+        openTargetEditor();
+      }
+    }
+
+    void handleActionTap() {
+      openTargetEditor();
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 18 * scale),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(26 * scale),
+          onTap: targetsLoaded ? handleCardTap : null,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26 * scale),
+              color: _cardBackground.withValues(alpha: 0.98),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.76),
+                width: 0.8 * scale,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _primaryGreen.withValues(alpha: 0.13),
+                  blurRadius: 30 * scale,
+                  offset: Offset(0, 15 * scale),
+                ),
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  blurRadius: 7 * scale,
+                  offset: Offset(0, -1 * scale),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(26 * scale),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(26 * scale),
+                        bottom: Radius.circular(18 * scale),
+                      ),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF123F2D), Color(0xFF1F6C4B)],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        15 * scale,
+                        14 * scale,
+                        15 * scale,
+                        14 * scale,
+                      ),
+                      child: Row(
+                        children: [
+                          _DashboardGoalMedallion(
+                            scale: scale,
+                            progress: focusProgress.progress,
+                            active: focusProgress.hasTarget,
+                          ),
+                          SizedBox(width: 12 * scale),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Hedef Akışı',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15.8 * scale,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.02,
+                                  ),
+                                ),
+                                SizedBox(height: 5 * scale),
+                                Text(
+                                  _dashboardGoalStatusText(
+                                    snapshot,
+                                    targetsLoaded,
+                                    targets,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.74),
+                                    fontSize: 10.8 * scale,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: 8 * scale),
+                          _DashboardGoalActionPill(
+                            scale: scale,
+                            label: targetsLoaded ? actionLabel : '...',
+                            onTap: targetsLoaded ? handleActionTap : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      15 * scale,
+                      14 * scale,
+                      15 * scale,
+                      15 * scale,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _DashboardGoalLane(
+                              scale: scale,
+                              icon: Icons.today_rounded,
+                              label: 'Bugün',
+                              progress: snapshot.daily,
+                              color: _buttonGreen,
+                              emptyStatus: targetsLoaded
+                                  ? 'Günlük hedef yok'
+                                  : 'Yükleniyor',
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 12 * scale,
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: _dividerColor.withValues(
+                                      alpha: 0.95,
+                                    ),
+                                    width: 0.8 * scale,
+                                  ),
+                                ),
+                              ),
+                              child: const SizedBox(width: 0),
+                            ),
+                          ),
+                          Expanded(
+                            child: _DashboardGoalLane(
+                              scale: scale,
+                              icon: Icons.calendar_month_rounded,
+                              label: 'Bu ay',
+                              progress: snapshot.monthly,
+                              color: _goalGold,
+                              badge: snapshot.monthlyAutomatic
+                                  ? 'otomatik'
+                                  : null,
+                              emptyStatus: targetsLoaded
+                                  ? 'Aylık hedef yok'
+                                  : 'Yükleniyor',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _offerDashboardDailyTargetReminder({
+  required BuildContext context,
+  required WidgetRef ref,
+  required int dailyTarget,
+}) async {
+  final reminderTime = await showDialog<TimeOfDay>(
+    context: context,
+    builder: (dialogContext) {
+      var selectedTime = const TimeOfDay(
+        hour: ReminderRepository.dailyTargetReminderHour,
+        minute: ReminderRepository.dailyTargetReminderMinute,
+      );
+
+      return StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final timeLabel = _formatDashboardReminderDialogTime(selectedTime);
+
+          return AlertDialog(
+            backgroundColor: _cardBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            icon: const Icon(
+              Icons.notifications_active_rounded,
+              color: _buttonGreen,
+            ),
+            title: const Text('Hedefini her gün yanında tutalım mı?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Günlük ${_formatDashboardNumber(dailyTarget)} zikir hedefin güzel bir adım. '
+                  'Sana uygun bir saatte küçük bir hatırlatma ekleyelim; '
+                  'günün yoğunluğunda unutmaz, ilerlemeni düzenli takip edersin.',
+                ),
+                const SizedBox(height: 18),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await showAppTimePicker(
+                      context: dialogContext,
+                      initialTime: selectedTime,
+                      helpText: 'Günlük hedef hatırlatma saati',
+                    );
+                    if (picked == null || !dialogContext.mounted) {
+                      return;
+                    }
+
+                    setDialogState(() => selectedTime = picked);
+                  },
+                  icon: const Icon(Icons.schedule_rounded, size: 18),
+                  label: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Hatırlatma saati'),
+                      Text(
+                        timeLabel,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _primaryText,
+                    side: BorderSide(
+                      color: _buttonGreen.withValues(alpha: 0.22),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Şimdi değil'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop(selectedTime),
+                icon: const Icon(Icons.add_alert_rounded, size: 18),
+                label: Text("$timeLabel'te ekle"),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _primaryGreen,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  if (reminderTime == null || !context.mounted) {
+    return;
+  }
+
+  final notifications = ref.read(localNotificationServiceProvider);
+  final notificationsAllowed = await ensureNotificationPermissionForReminder(
+    context: context,
+    areNotificationsAllowed: notifications.areNotificationsAllowed,
+    requestPermission: notifications.requestNotificationPermission,
+  );
+  if (!notificationsAllowed || !context.mounted) {
+    return;
+  }
+
+  try {
+    await ref
+        .read(reminderRepositoryProvider)
+        .upsertDailyTargetReminder(
+          target: dailyTarget,
+          hour: reminderTime.hour,
+          minute: reminderTime.minute,
+        );
+    if (!context.mounted) {
+      return;
+    }
+
+    final timeLabel = _formatDashboardReminderDialogTime(reminderTime);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Günlük hedef hatırlatıcısı her gün $timeLabel'te aktif.",
+        ),
+      ),
+    );
+  } catch (_) {
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Hatırlatıcı eklenemedi. Lütfen tekrar dene.'),
+      ),
+    );
+  }
+}
+
+String _formatDashboardReminderDialogTime(TimeOfDay time) {
+  return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+}
+
+class _DashboardGoalLane extends StatelessWidget {
+  const _DashboardGoalLane({
+    required this.scale,
+    required this.icon,
+    required this.label,
+    required this.progress,
+    required this.color,
+    required this.emptyStatus,
+    this.badge,
+  });
+
+  final double scale;
+  final IconData icon;
+  final String label;
+  final _DashboardGoalProgress progress;
+  final Color color;
+  final String emptyStatus;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = progress.hasTarget
+        ? progress.completed
+              ? 'Tamamlandı'
+              : '${_formatDashboardNumber(progress.remaining)} kaldı'
+        : emptyStatus;
+    final badge = this.badge;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 17.5 * scale),
+            SizedBox(width: 6 * scale),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _secondaryText,
+                  fontSize: 12.2 * scale,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8 * scale),
+        Text(
+          progress.countLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 16.2 * scale,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+        SizedBox(height: 10 * scale),
+        _DashboardGoalBar(
+          scale: scale,
+          progress: progress.progress,
+          color: color,
+          active: progress.hasTarget,
+        ),
+        SizedBox(height: 8 * scale),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                status,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: progress.completed
+                      ? color
+                      : _secondaryText.withValues(alpha: 0.82),
+                  fontSize: 11.0 * scale,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ),
+            if (badge != null) ...[
+              SizedBox(width: 6 * scale),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 5 * scale,
+                    vertical: 2 * scale,
+                  ),
+                  child: Text(
+                    badge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 9.2 * scale,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardGoalBar extends StatelessWidget {
+  const _DashboardGoalBar({
+    required this.scale,
+    required this.progress,
+    required this.color,
+    required this.active,
+  });
+
+  final double scale;
+  final double progress;
+  final Color color;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: SizedBox(
+        height: 6.2 * scale,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: _dividerColor.withValues(alpha: 0.78)),
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: active ? progress : 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [color.withValues(alpha: 0.70), color],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardGoalMedallion extends StatelessWidget {
+  const _DashboardGoalMedallion({
+    required this.scale,
+    required this.progress,
+    required this.active,
+  });
+
+  final double scale;
+  final double progress;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = 50 * scale;
+    final percent = (progress * 100).round();
+
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(size),
+            painter: _DashboardGoalRingPainter(
+              progress: progress,
+              active: active,
+              scale: scale,
+            ),
+          ),
+          if (active)
+            Text(
+              '%$percent',
+              maxLines: 1,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12.2 * scale,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            )
+          else
+            Icon(
+              Icons.flag_rounded,
+              color: Colors.white.withValues(alpha: 0.82),
+              size: 19 * scale,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardGoalActionPill extends StatelessWidget {
+  const _DashboardGoalActionPill({
+    required this.scale,
+    required this.label,
+    required this.onTap,
+  });
+
+  final double scale;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: _cardBackground.withValues(alpha: 0.96),
+          border: Border.all(
+            color: _goalGold.withValues(alpha: 0.42),
+            width: 0.7 * scale,
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 10 * scale,
+            vertical: 6 * scale,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                color: _primaryGreen,
+                size: 13.5 * scale,
+              ),
+              SizedBox(width: 4 * scale),
+              Text(
+                label,
+                style: TextStyle(
+                  color: _primaryGreen,
+                  fontSize: 10.4 * scale,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardGoalTargetSheet extends StatefulWidget {
+  const _DashboardGoalTargetSheet({required this.scale, required this.targets});
+
+  final double scale;
+  final _DashboardGoalTargets targets;
+
+  @override
+  State<_DashboardGoalTargetSheet> createState() =>
+      _DashboardGoalTargetSheetState();
+}
+
+class _DashboardGoalTargetSheetState extends State<_DashboardGoalTargetSheet> {
+  late final TextEditingController _dailyController;
+  late final TextEditingController _monthlyController;
+  late final TextEditingController _yearlyController;
+
+  @override
+  void initState() {
+    super.initState();
+    _dailyController = TextEditingController(
+      text: _dashboardTargetInputText(widget.targets.daily),
+    );
+    _monthlyController = TextEditingController(
+      text: _dashboardTargetInputText(widget.targets.monthly),
+    );
+    _yearlyController = TextEditingController(
+      text: _dashboardTargetInputText(widget.targets.yearly),
+    );
+    _dailyController.addListener(_refreshAutomaticTargets);
+  }
+
+  @override
+  void dispose() {
+    _dailyController.removeListener(_refreshAutomaticTargets);
+    _dailyController.dispose();
+    _monthlyController.dispose();
+    _yearlyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = widget.scale;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final now = DateTime.now();
+    final dailyDraft = _parseDashboardTargetInput(_dailyController.text);
+    final automaticMonthly = dailyDraft == null
+        ? null
+        : dailyDraft * DateUtils.getDaysInMonth(now.year, now.month);
+    final automaticYearly = dailyDraft == null
+        ? null
+        : dailyDraft * _dashboardDaysInYear(now.year);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _cardBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28 * scale)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 24 * scale,
+              offset: Offset(0, -8 * scale),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20 * scale,
+                12 * scale,
+                20 * scale,
+                18 * scale,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42 * scale,
+                      height: 4 * scale,
+                      decoration: BoxDecoration(
+                        color: _dividerColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16 * scale),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Hedefleri düzenle',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _primaryText,
+                            fontSize: 19 * scale,
+                            fontWeight: FontWeight.w900,
+                            height: 1.05,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.close_rounded, size: 20 * scale),
+                        color: _secondaryText,
+                        style: IconButton.styleFrom(
+                          fixedSize: Size.square(36 * scale),
+                          minimumSize: Size.square(36 * scale),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12 * scale),
+                  _DashboardGoalInputField(
+                    scale: scale,
+                    controller: _dailyController,
+                    icon: Icons.today_rounded,
+                    label: 'Günlük hedef',
+                    hint: '2500',
+                  ),
+                  SizedBox(height: 10 * scale),
+                  _DashboardAutomaticTargetPreview(
+                    scale: scale,
+                    monthlyValue: automaticMonthly,
+                    yearlyValue: automaticYearly,
+                  ),
+                  SizedBox(height: 10 * scale),
+                  _DashboardGoalInputField(
+                    scale: scale,
+                    controller: _monthlyController,
+                    icon: Icons.calendar_month_rounded,
+                    label: 'Aylık özel hedef',
+                    hint: automaticMonthly == null
+                        ? 'Günlükten otomatik'
+                        : 'Otomatik: ${_formatDashboardNumber(automaticMonthly)}',
+                  ),
+                  SizedBox(height: 10 * scale),
+                  _DashboardGoalInputField(
+                    scale: scale,
+                    controller: _yearlyController,
+                    icon: Icons.flag_rounded,
+                    label: 'Yıllık özel hedef',
+                    hint: automaticYearly == null
+                        ? 'Günlükten otomatik'
+                        : 'Otomatik: ${_formatDashboardNumber(automaticYearly)}',
+                  ),
+                  SizedBox(height: 14 * scale),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _clearInputs,
+                          icon: Icon(Icons.backspace_rounded, size: 15 * scale),
+                          label: const Text('Temizle'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _secondaryText,
+                            side: BorderSide(
+                              color: _dividerColor,
+                              width: 1 * scale,
+                            ),
+                            minimumSize: Size.fromHeight(46 * scale),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15 * scale),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 10 * scale),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _save,
+                          icon: Icon(Icons.check_rounded, size: 16 * scale),
+                          label: const Text('Kaydet'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _primaryGreen,
+                            foregroundColor: Colors.white,
+                            minimumSize: Size.fromHeight(46 * scale),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15 * scale),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _refreshAutomaticTargets() {
+    setState(() {});
+  }
+
+  void _clearInputs() {
+    _dailyController.clear();
+    _monthlyController.clear();
+    _yearlyController.clear();
+  }
+
+  void _save() {
+    Navigator.of(context).pop(
+      _DashboardGoalTargets(
+        daily: _parseDashboardTargetInput(_dailyController.text),
+        monthly: _parseDashboardTargetInput(_monthlyController.text),
+        yearly: _parseDashboardTargetInput(_yearlyController.text),
+      ),
+    );
+  }
+}
+
+class _DashboardAutomaticTargetPreview extends StatelessWidget {
+  const _DashboardAutomaticTargetPreview({
+    required this.scale,
+    required this.monthlyValue,
+    required this.yearlyValue,
+  });
+
+  final double scale;
+  final int? monthlyValue;
+  final int? yearlyValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _primaryGreen.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(16 * scale),
+        border: Border.all(
+          color: _primaryGreen.withValues(alpha: 0.12),
+          width: 0.7 * scale,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          11 * scale,
+          9 * scale,
+          11 * scale,
+          9 * scale,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _DashboardAutomaticTargetValue(
+                scale: scale,
+                label: 'Aylık otomatik',
+                value: monthlyValue,
+              ),
+            ),
+            SizedBox(width: 8 * scale),
+            Expanded(
+              child: _DashboardAutomaticTargetValue(
+                scale: scale,
+                label: 'Yıllık otomatik',
+                value: yearlyValue,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardAutomaticTargetValue extends StatelessWidget {
+  const _DashboardAutomaticTargetValue({
+    required this.scale,
+    required this.label,
+    required this.value,
+  });
+
+  final double scale;
+  final String label;
+  final int? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _secondaryText,
+            fontSize: 8.6 * scale,
+            fontWeight: FontWeight.w800,
+            height: 1,
+          ),
+        ),
+        SizedBox(height: 4 * scale),
+        Text(
+          _formatDashboardTargetValue(value),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 12.2 * scale,
+            fontWeight: FontWeight.w900,
+            height: 1,
           ),
         ),
       ],
@@ -2097,53 +3410,1138 @@ class CategoryZikrSection extends StatelessWidget {
   }
 }
 
-class _CategoryItem {
-  const _CategoryItem(this.label, this.icon);
-
-  final String label;
-  final IconData icon;
-}
-
-class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({required this.scale, required this.item});
+class _DashboardGoalInputField extends StatelessWidget {
+  const _DashboardGoalInputField({
+    required this.scale,
+    required this.controller,
+    required this.icon,
+    required this.label,
+    required this.hint,
+  });
 
   final double scale;
-  final _CategoryItem item;
+  final TextEditingController controller;
+  final IconData icon;
+  final String label;
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 96 * scale,
-      padding: EdgeInsets.symmetric(
-        horizontal: 10 * scale,
-        vertical: 12 * scale,
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: [const _DashboardTargetNumberInputFormatter()],
+      style: TextStyle(
+        color: _primaryText,
+        fontSize: 15 * scale,
+        fontWeight: FontWeight.w800,
       ),
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: _primaryGreen, size: 20 * scale),
+        labelText: label,
+        hintText: hint,
+        hintStyle: TextStyle(color: _secondaryText.withValues(alpha: 0.52)),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.62),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16 * scale),
+          borderSide: BorderSide(color: _dividerColor, width: 1 * scale),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16 * scale),
+          borderSide: BorderSide(color: _dividerColor, width: 1 * scale),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16 * scale),
+          borderSide: BorderSide(color: _primaryGreen, width: 1.3 * scale),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardTargetNumberInputFormatter extends TextInputFormatter {
+  const _DashboardTargetNumberInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = _dashboardDigitsOnly(
+      newValue.text,
+    ).replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue(
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    final formatted = _formatDashboardDigitString(digits);
+    final extentOffset = newValue.selection.extentOffset;
+    final safeOffset = extentOffset < 0
+        ? 0
+        : math.min(extentOffset, newValue.text.length);
+    final digitsBeforeCursor = _dashboardDigitsOnly(
+      newValue.text.substring(0, safeOffset),
+    ).length;
+    final selectionOffset = _dashboardOffsetForDigitPosition(
+      formatted,
+      digitsBeforeCursor,
+    );
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: selectionOffset),
+      composing: TextRange.empty,
+    );
+  }
+}
+
+class _DashboardGoalRingPainter extends CustomPainter {
+  const _DashboardGoalRingPainter({
+    required this.progress,
+    required this.active,
+    required this.scale,
+  });
+
+  final double progress;
+  final bool active;
+  final double scale;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2 - 2 * scale;
+    final trackPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.08)
+      ..style = PaintingStyle.fill;
+    final rimPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4 * scale
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawCircle(center, radius, trackPaint);
+    canvas.drawCircle(center, radius, rimPaint);
+
+    if (!active) return;
+
+    final arcPaint = Paint()
+      ..shader = SweepGradient(
+        startAngle: -math.pi / 2,
+        endAngle: math.pi * 1.5,
+        colors: [_goalMint, _goalGold, _goalMint],
+      ).createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.8 * scale
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      math.pi * 2 * progress,
+      false,
+      arcPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashboardGoalRingPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.active != active ||
+        oldDelegate.scale != scale;
+  }
+}
+
+class _DashboardGoalSnapshot {
+  const _DashboardGoalSnapshot({
+    required this.daily,
+    required this.monthly,
+    required this.monthlyAutomatic,
+  });
+
+  final _DashboardGoalProgress daily;
+  final _DashboardGoalProgress monthly;
+  final bool monthlyAutomatic;
+
+  factory _DashboardGoalSnapshot.fromBuckets(
+    List<CounterStatBucket> buckets,
+    _DashboardGoalTargets targets,
+    DateTime now,
+  ) {
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final tomorrowStart = todayStart.add(const Duration(days: 1));
+    final monthStart = DateTime(now.year, now.month);
+    final monthEnd = DateTime(now.year, now.month + 1);
+    var dailyTotal = 0;
+    var monthlyTotal = 0;
+
+    for (final bucket in buckets) {
+      final count = math.max(0, bucket.count);
+      if (count == 0) continue;
+
+      final bucketStart = bucket.bucketStart;
+      if (bucketStart.isBefore(monthStart) || !bucketStart.isBefore(monthEnd)) {
+        continue;
+      }
+
+      monthlyTotal += count;
+      if (!bucketStart.isBefore(todayStart) &&
+          bucketStart.isBefore(tomorrowStart)) {
+        dailyTotal += count;
+      }
+    }
+
+    return _DashboardGoalSnapshot(
+      daily: _DashboardGoalProgress(total: dailyTotal, target: targets.daily),
+      monthly: _DashboardGoalProgress(
+        total: monthlyTotal,
+        target: targets.monthlyTargetFor(monthStart),
+      ),
+      monthlyAutomatic: targets.monthlyIsAutomatic,
+    );
+  }
+}
+
+class _DashboardGoalProgress {
+  const _DashboardGoalProgress({required this.total, required this.target});
+
+  final int total;
+  final int? target;
+
+  bool get hasTarget => target != null;
+
+  bool get completed {
+    final target = this.target;
+    return target != null && total >= target;
+  }
+
+  int get remaining {
+    final target = this.target;
+    if (target == null) return 0;
+    return math.max(0, target - total);
+  }
+
+  double get progress {
+    final target = this.target;
+    if (target == null) return 0;
+    return (total / math.max(1, target)).clamp(0.0, 1.0).toDouble();
+  }
+
+  String get countLabel {
+    final target = this.target;
+    if (target == null) return _formatDashboardNumber(total);
+    return '${_formatDashboardNumber(total)} / ${_formatDashboardNumber(target)}';
+  }
+}
+
+class _DashboardGoalTargets {
+  const _DashboardGoalTargets({this.daily, this.monthly, this.yearly});
+
+  final int? daily;
+  final int? monthly;
+  final int? yearly;
+
+  bool get hasAny => daily != null || monthly != null || yearly != null;
+
+  bool get monthlyIsAutomatic => monthly == null && daily != null;
+
+  bool get yearlyIsAutomatic => yearly == null && daily != null;
+
+  int? monthlyTargetFor(DateTime month) {
+    final customTarget = monthly;
+    if (customTarget != null) return customTarget;
+
+    final dailyTarget = daily;
+    if (dailyTarget == null) return null;
+
+    return dailyTarget * DateUtils.getDaysInMonth(month.year, month.month);
+  }
+
+  int? yearlyTargetFor(int year) {
+    final customTarget = yearly;
+    if (customTarget != null) return customTarget;
+
+    final dailyTarget = daily;
+    if (dailyTarget == null) return null;
+
+    return dailyTarget * _dashboardDaysInYear(year);
+  }
+}
+
+String _dashboardGoalStatusText(
+  _DashboardGoalSnapshot snapshot,
+  bool targetsLoaded,
+  _DashboardGoalTargets targets,
+) {
+  if (!targetsLoaded) return 'Hedefler hazırlanıyor';
+  if (!targets.hasAny) return 'Günlük hedefini gir, ay kendini tamamlasın';
+  if (snapshot.daily.completed && snapshot.monthly.completed) {
+    return 'Bugün ve bu ay hedef tamam';
+  }
+  if (snapshot.daily.completed) return 'Bugün tamam; ay izleniyor';
+  if (snapshot.daily.hasTarget) {
+    return 'Bugün ${_formatDashboardNumber(snapshot.daily.remaining)} zikir kaldı';
+  }
+  if (snapshot.monthly.hasTarget) {
+    return 'Bu ay ${_formatDashboardNumber(snapshot.monthly.remaining)} zikir kaldı';
+  }
+
+  return 'İlerleme burada birikecek';
+}
+
+int? _readDashboardTargetPreference(SharedPreferences prefs, String key) {
+  final value = prefs.getInt(key);
+  if (value == null || value <= 0) return null;
+  return value;
+}
+
+Future<void> _writeDashboardTargetPreference(
+  SharedPreferences prefs,
+  String key,
+  int? value,
+) {
+  if (value == null || value <= 0) {
+    return prefs.remove(key);
+  }
+
+  return prefs.setInt(key, value);
+}
+
+int? _parseDashboardTargetInput(String raw) {
+  final value = int.tryParse(_dashboardDigitsOnly(raw));
+  if (value == null || value <= 0) return null;
+  return value;
+}
+
+String _formatDashboardNumber(int value) {
+  return _formatDashboardDigitString(value.toString());
+}
+
+String _formatDashboardTargetValue(int? value) {
+  if (value == null) return 'Belirle';
+  return _formatDashboardNumber(value);
+}
+
+String _dashboardTargetInputText(int? value) =>
+    value == null ? '' : _formatDashboardNumber(value);
+
+String _dashboardDigitsOnly(String value) =>
+    value.replaceAll(RegExp(r'\D'), '');
+
+String _formatDashboardDigitString(String digits) {
+  final raw = digits.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  final buffer = StringBuffer();
+
+  for (var i = 0; i < raw.length; i++) {
+    final remaining = raw.length - i;
+    buffer.write(raw[i]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+
+  return buffer.toString();
+}
+
+int _dashboardOffsetForDigitPosition(String formatted, int digitPosition) {
+  if (digitPosition <= 0) return 0;
+
+  var seenDigits = 0;
+  for (var i = 0; i < formatted.length; i++) {
+    if (RegExp(r'\d').hasMatch(formatted[i])) {
+      seenDigits++;
+    }
+    if (seenDigits >= digitPosition) {
+      return i + 1;
+    }
+  }
+
+  return formatted.length;
+}
+
+int _dashboardDaysInYear(int year) {
+  return DateTime(year + 1).difference(DateTime(year)).inDays;
+}
+
+class _CategoryItem {
+  const _CategoryItem({
+    required this.label,
+    required this.title,
+    required this.icon,
+    required this.description,
+    required this.esmaNumbers,
+    required this.dhikrIds,
+  });
+
+  final String label;
+  final String title;
+  final IconData icon;
+  final String description;
+  final List<int> esmaNumbers;
+  final List<String> dhikrIds;
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.scale,
+    required this.item,
+    required this.onTap,
+  });
+
+  final double scale;
+  final _CategoryItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(20 * scale);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Ink(
+          width: 96 * scale,
+          padding: EdgeInsets.symmetric(
+            horizontal: 10 * scale,
+            vertical: 12 * scale,
+          ),
+          decoration: BoxDecoration(
+            color: _cardBackground.withValues(alpha: 0.84),
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: _primaryGreen.withValues(alpha: 0.035),
+                blurRadius: 14 * scale,
+                spreadRadius: -4 * scale,
+                offset: Offset(0, 5 * scale),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(item.icon, color: _mutedGreen, size: 28 * scale),
+              SizedBox(height: 7 * scale),
+              Text(
+                item.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 12.4 * scale,
+                  fontWeight: FontWeight.w700,
+                  height: 1.18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryDhikrSheet extends ConsumerWidget {
+  const _CategoryDhikrSheet({
+    required this.scale,
+    required this.item,
+    required this.onOpenDhikr,
+  });
+
+  final double scale;
+  final _CategoryItem item;
+  final ValueChanged<DhikrItem> onOpenDhikr;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final media = MediaQuery.of(context);
+    final sheetScale = scale;
+    final contentWidth = math.min(
+      media.size.width,
+      appLayoutBaselineWidth * sheetScale,
+    );
+    final bottomPadding = media.padding.bottom + 18 * sheetScale;
+    final esmas = _categoryEsmas(item);
+    final dhikrs = ref.watch(dhikrItemsProvider);
+    final radius = BorderRadius.vertical(top: Radius.circular(28 * sheetScale));
+
+    return SafeArea(
+      top: false,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.82,
+        minChildSize: 0.28,
+        maxChildSize: 0.88,
+        expand: false,
+        snap: true,
+        shouldCloseOnMinExtent: true,
+        builder: (context, scrollController) {
+          return Align(
+            alignment: Alignment.bottomCenter,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _pageBackground,
+                borderRadius: radius,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.70),
+                  width: 0.8 * sheetScale,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _primaryGreen.withValues(alpha: 0.18),
+                    blurRadius: 28 * sheetScale,
+                    offset: Offset(0, -10 * sheetScale),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: radius,
+                child: SizedBox(
+                  width: contentWidth,
+                  child: dhikrs.when(
+                    data: (items) {
+                      final dhikrItems = _categoryDhikrs(item, items);
+                      return SingleChildScrollView(
+                        controller: scrollController,
+                        physics: const ClampingScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          18 * sheetScale,
+                          10 * sheetScale,
+                          18 * sheetScale,
+                          bottomPadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _CategorySheetHeader(
+                              scale: sheetScale,
+                              item: item,
+                              esmaCount: esmas.length,
+                              dhikrCount: dhikrItems.length,
+                            ),
+                            SizedBox(height: 16 * sheetScale),
+                            _CategorySheetSection(
+                              scale: sheetScale,
+                              title: 'Esma-ül Hüsna',
+                              count: esmas.length,
+                              children: [
+                                for (final esma in esmas)
+                                  _CategorySheetTile(
+                                    scale: sheetScale,
+                                    icon: Icons.auto_awesome_rounded,
+                                    typeLabel: 'Esma',
+                                    title: esma.dhikrName,
+                                    arabicText: esma.dhikrArabicText,
+                                    subtitle: '${esma.name} • ${esma.meaning}',
+                                    target: esma.ebcedNumber,
+                                    onTap: () => onOpenDhikr(esma.toDhikr()),
+                                  ),
+                              ],
+                            ),
+                            SizedBox(height: 12 * sheetScale),
+                            _CategorySheetSection(
+                              scale: sheetScale,
+                              title: 'Zikir ve Dua',
+                              count: dhikrItems.length,
+                              children: [
+                                for (final dhikr in dhikrItems)
+                                  _CategorySheetTile(
+                                    scale: sheetScale,
+                                    icon: _categoryTileIcon(dhikr),
+                                    typeLabel: _isCategoryDua(dhikr)
+                                        ? 'Dua'
+                                        : 'Zikir',
+                                    title: dhikr.name,
+                                    arabicText: dhikr.arabicText,
+                                    subtitle: dhikr.meaning ?? dhikr.category,
+                                    target: dhikr.defaultTarget,
+                                    onTap: () => onOpenDhikr(dhikr),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    loading: () => SingleChildScrollView(
+                      controller: scrollController,
+                      padding: EdgeInsets.fromLTRB(
+                        18 * sheetScale,
+                        10 * sheetScale,
+                        18 * sheetScale,
+                        bottomPadding,
+                      ),
+                      child: _CategorySheetState(
+                        scale: sheetScale,
+                        icon: Icons.hourglass_top_rounded,
+                        title: 'İçerik hazırlanıyor',
+                        message: 'Esma ve zikirler birazdan açılacak.',
+                      ),
+                    ),
+                    error: (error, stackTrace) => SingleChildScrollView(
+                      controller: scrollController,
+                      padding: EdgeInsets.fromLTRB(
+                        18 * sheetScale,
+                        10 * sheetScale,
+                        18 * sheetScale,
+                        bottomPadding,
+                      ),
+                      child: _CategorySheetState(
+                        scale: sheetScale,
+                        icon: Icons.error_outline_rounded,
+                        title: 'İçerik açılamadı',
+                        message: '$error',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CategorySheetHeader extends StatelessWidget {
+  const _CategorySheetHeader({
+    required this.scale,
+    required this.item,
+    required this.esmaCount,
+    required this.dhikrCount,
+  });
+
+  final double scale;
+  final _CategoryItem item;
+  final int esmaCount;
+  final int dhikrCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            width: 42 * scale,
+            height: 4 * scale,
+            decoration: BoxDecoration(
+              color: _mutedGreen.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ),
+        SizedBox(height: 16 * scale),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: _buttonGreen.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: SizedBox.square(
+                dimension: 46 * scale,
+                child: Icon(item.icon, color: _primaryGreen, size: 24 * scale),
+              ),
+            ),
+            SizedBox(width: 12 * scale),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 21 * scale,
+                      fontWeight: FontWeight.w800,
+                      height: 1.05,
+                    ),
+                  ),
+                  SizedBox(height: 6 * scale),
+                  Text(
+                    item.description,
+                    style: TextStyle(
+                      color: _secondaryText,
+                      fontSize: 12.2 * scale,
+                      fontWeight: FontWeight.w600,
+                      height: 1.28,
+                    ),
+                  ),
+                  SizedBox(height: 9 * scale),
+                  Wrap(
+                    spacing: 7 * scale,
+                    runSpacing: 7 * scale,
+                    children: [
+                      _CategoryCountChip(
+                        scale: scale,
+                        label: '$esmaCount esma',
+                      ),
+                      _CategoryCountChip(
+                        scale: scale,
+                        label: '$dhikrCount zikir',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryCountChip extends StatelessWidget {
+  const _CategoryCountChip({required this.scale, required this.label});
+
+  final double scale;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: _cardBackground.withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(20 * scale),
-        boxShadow: _softShadow,
+        color: _goalMint.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _buttonGreen.withValues(alpha: 0.14)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 9 * scale,
+          vertical: 5 * scale,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: _primaryGreen,
+            fontSize: 10.5 * scale,
+            fontWeight: FontWeight.w800,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategorySheetSection extends StatelessWidget {
+  const _CategorySheetSection({
+    required this.scale,
+    required this.title,
+    required this.count,
+    required this.children,
+  });
+
+  final double scale;
+  final String title;
+  final int count;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 15.5 * scale,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              '$count kayıt',
+              style: TextStyle(
+                color: _secondaryText,
+                fontSize: 11 * scale,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8 * scale),
+        for (var index = 0; index < children.length; index++) ...[
+          children[index],
+          if (index != children.length - 1) SizedBox(height: 8 * scale),
+        ],
+      ],
+    );
+  }
+}
+
+class _CategorySheetTile extends StatelessWidget {
+  const _CategorySheetTile({
+    required this.scale,
+    required this.icon,
+    required this.typeLabel,
+    required this.title,
+    required this.subtitle,
+    required this.target,
+    required this.onTap,
+    this.arabicText,
+  });
+
+  final double scale;
+  final IconData icon;
+  final String typeLabel;
+  final String title;
+  final String subtitle;
+  final String? arabicText;
+  final int target;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(18 * scale);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Ink(
+          padding: EdgeInsets.fromLTRB(
+            12 * scale,
+            11 * scale,
+            10 * scale,
+            11 * scale,
+          ),
+          decoration: BoxDecoration(
+            color: _cardBackground.withValues(alpha: 0.92),
+            borderRadius: radius,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.75)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _buttonGreen.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox.square(
+                  dimension: 36 * scale,
+                  child: Icon(icon, color: _mutedGreen, size: 19 * scale),
+                ),
+              ),
+              SizedBox(width: 10 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      typeLabel,
+                      style: TextStyle(
+                        color: _goalGold,
+                        fontSize: 9.4 * scale,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                    SizedBox(height: 4 * scale),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 13.3 * scale,
+                        fontWeight: FontWeight.w800,
+                        height: 1.14,
+                      ),
+                    ),
+                    if (arabicText != null &&
+                        arabicText!.trim().isNotEmpty) ...[
+                      SizedBox(height: 6 * scale),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          arabicText!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            color: _primaryGreen,
+                            fontSize: 16 * scale,
+                            fontWeight: FontWeight.w700,
+                            height: 1.34,
+                          ),
+                        ),
+                      ),
+                    ],
+                    SizedBox(height: 5 * scale),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _secondaryText,
+                        fontSize: 11 * scale,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8 * scale),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _CategoryTargetBadge(scale: scale, target: target),
+                  SizedBox(height: 8 * scale),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: _mutedGreen,
+                    size: 22 * scale,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryTargetBadge extends StatelessWidget {
+  const _CategoryTargetBadge({required this.scale, required this.target});
+
+  final double scale;
+  final int target;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _buttonGreen.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 7 * scale,
+          vertical: 4 * scale,
+        ),
+        child: Text(
+          '$target',
+          style: TextStyle(
+            color: _primaryGreen,
+            fontSize: 10.2 * scale,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategorySheetState extends StatelessWidget {
+  const _CategorySheetState({
+    required this.scale,
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final double scale;
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 24 * scale;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        28 * scale,
+        32 * scale,
+        28 * scale,
+        bottomPadding,
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(item.icon, color: _mutedGreen, size: 28 * scale),
-          SizedBox(height: 7 * scale),
+          Icon(icon, color: _mutedGreen, size: 34 * scale),
+          SizedBox(height: 12 * scale),
           Text(
-            item.label,
+            title,
             textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: _primaryText,
-              fontSize: 12.4 * scale,
-              fontWeight: FontWeight.w700,
-              height: 1.18,
+              fontSize: 16 * scale,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 6 * scale),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _secondaryText,
+              fontSize: 12 * scale,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+List<EsmaItem> _categoryEsmas(_CategoryItem item) {
+  return [
+    for (final number in item.esmaNumbers)
+      for (final esma in esmaItems)
+        if (esma.number == number) esma,
+  ];
+}
+
+List<DhikrItem> _categoryDhikrs(_CategoryItem item, List<DhikrItem> dhikrs) {
+  return [
+    for (final id in item.dhikrIds)
+      for (final dhikr in dhikrs)
+        if (dhikr.id == id) dhikr,
+  ];
+}
+
+IconData _categoryTileIcon(DhikrItem item) {
+  return switch (item.category) {
+    'İstiğfar' => Icons.restart_alt_rounded,
+    'Korunma' => Icons.shield_rounded,
+    'Tesbih' => Icons.auto_awesome_rounded,
+    'Tevhid' => Icons.brightness_high_rounded,
+    _ => Icons.menu_book_rounded,
+  };
+}
+
+bool _isCategoryDua(DhikrItem item) {
+  return const {
+    'allahumme-ilmen-rizqan-amalan',
+    'allahumme-rabben-nas-ishfi',
+    'eselullahal-azim-yashfik',
+    'rabbena-hablana-min-azwajina',
+    'ihdinas-siratal-mustakim',
+    'rabbi-shrah-li-sadri',
+    'rabbena-atina',
+    'rabbi-zidni-ilma',
+    'ya-hayyu-ya-kayyum',
+  }.contains(item.id);
+}
+
+Future<void> _showHomeDhikrDetail(
+  BuildContext context,
+  WidgetRef ref,
+  DhikrItem item,
+) async {
+  ref.read(interactionFeedbackServiceProvider).selection();
+  await showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Zikir detayını kapat',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 420),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return const SizedBox.shrink();
+    },
+    transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+      final media = MediaQuery.of(dialogContext);
+      final detailScale = proportionalLayoutScaleFor(media.size.width);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+
+      return Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(dialogContext).pop(),
+                child: FadeTransition(
+                  opacity: curved,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.24),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: 1,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: media.size.height * 0.92,
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(28 * detailScale),
+                        ),
+                        border: Border.all(
+                          color: _goalGold.withValues(alpha: 0.55),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            blurRadius: 1 * detailScale,
+                            offset: Offset(0, -0.5 * detailScale),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(27 * detailScale),
+                        ),
+                        child: DhikrDetailScreen(
+                          dhikrId: item.id,
+                          sheetMode: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class HomeBottomNav extends ConsumerWidget {
@@ -2169,19 +4567,32 @@ class HomeBottomNav extends ConsumerWidget {
     );
     final navRadius = BorderRadius.circular(32 * scale);
     final activeCounterState = ref.watch(counterControllerProvider);
-    final lastStartedDhikrId = ref.watch(lastStartedDhikrIdProvider);
+    final storedHistoryEntries = ref
+        .watch(_dashboardHistoryProvider)
+        .maybeWhen(
+          data: (entries) => entries,
+          orElse: () => const <_HistoryEntry>[],
+        );
     final dhikrs = ref
         .watch(dhikrItemsProvider)
         .maybeWhen(data: (items) => items, orElse: () => builtinDhikrs);
-    final quickStartDhikrId =
-        lastStartedDhikrId ?? activeCounterState.activeDhikr.id;
-    final quickStartDhikr =
-        _dhikrById(dhikrs, quickStartDhikrId) ??
-        (activeCounterState.activeDhikr.id == quickStartDhikrId
-            ? activeCounterState.activeDhikr
-            : null) ??
-        _dhikrById(builtinDhikrs, 'subhanallah') ??
-        builtinDhikrs.first;
+    final quickStartEntry =
+        _ongoingEntryFromCounter(activeCounterState) ??
+        _latestOngoingHistoryEntry(storedHistoryEntries);
+    final quickStartDhikr = quickStartEntry == null
+        ? _defaultQuickStartDhikr(dhikrs)
+        : activeCounterState.activeDhikr.id == quickStartEntry.dhikrId
+        ? activeCounterState.activeDhikr
+        : _dhikrById(dhikrs, quickStartEntry.dhikrId) ??
+              _dhikrById(builtinDhikrs, quickStartEntry.dhikrId) ??
+              DhikrItem(
+                id: quickStartEntry.dhikrId,
+                name: quickStartEntry.title,
+                category: 'History',
+                defaultTarget: quickStartEntry.target <= 0
+                    ? 33
+                    : quickStartEntry.target,
+              );
     final feedback = ref.read(interactionFeedbackServiceProvider);
 
     void openRouteWithSelectionFeedback(String route) {
@@ -2200,7 +4611,14 @@ class HomeBottomNav extends ConsumerWidget {
     }
 
     void handleQuickStart() {
-      ref.read(counterControllerProvider.notifier).startDhikr(quickStartDhikr);
+      ref
+          .read(counterControllerProvider.notifier)
+          .startDhikr(
+            quickStartDhikr,
+            target: quickStartEntry?.target,
+            initialCount: quickStartEntry?.count ?? 0,
+            sessionId: quickStartEntry?.sessionId,
+          );
       context.push(AppRoutes.counter);
       feedback.primaryAction();
     }

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/data/local/database_provider.dart';
 import '../../../core/services/interaction_feedback_service.dart';
@@ -11,14 +12,18 @@ import '../../dhikr_library/data/builtin_dhikrs.dart';
 import '../../dhikr_library/domain/dhikr_item.dart';
 import '../../esma/data/esma_data.dart';
 
+const _uuid = Uuid();
+
 class CounterState {
   const CounterState({
+    required this.sessionId,
     required this.activeDhikr,
     required this.count,
     required this.target,
     this.completed = false,
   });
 
+  final String sessionId;
   final DhikrItem activeDhikr;
   final int count;
   final int target;
@@ -29,12 +34,14 @@ class CounterState {
       isInfinite || target == 0 ? 0 : (count / target).clamp(0, 1);
 
   CounterState copyWith({
+    String? sessionId,
     DhikrItem? activeDhikr,
     int? count,
     int? target,
     bool? completed,
   }) {
     return CounterState(
+      sessionId: sessionId ?? this.sessionId,
       activeDhikr: activeDhikr ?? this.activeDhikr,
       count: count ?? this.count,
       target: target ?? this.target,
@@ -53,40 +60,94 @@ class CounterController extends Notifier<CounterState> {
     final defaultDhikr = builtinDhikrs.first;
     Future.microtask(_restoreActiveSession);
     return CounterState(
+      sessionId: _newSessionId(),
       activeDhikr: defaultDhikr,
       count: 0,
       target: defaultDhikr.defaultTarget,
     );
   }
 
-  void startDhikr(DhikrItem dhikr, {int? target, int initialCount = 0}) {
+  void startDhikr(
+    DhikrItem dhikr, {
+    int? target,
+    int initialCount = 0,
+    String? sessionId,
+  }) {
     final resolvedTarget = target ?? dhikr.defaultTarget;
     final positiveInitialCount = initialCount < 0 ? 0 : initialCount;
     final resolvedCount =
         resolvedTarget > 0 && positiveInitialCount > resolvedTarget
         ? resolvedTarget
         : positiveInitialCount;
+    final resolvedSessionId = sessionId ?? _newSessionId();
+    final completed = resolvedTarget > 0 && resolvedCount >= resolvedTarget;
 
     state = CounterState(
+      sessionId: resolvedSessionId,
       activeDhikr: dhikr,
       count: resolvedCount,
       target: resolvedTarget,
-      completed: resolvedTarget > 0 && resolvedCount >= resolvedTarget,
+      completed: completed,
     );
     _changedBeforeRestore = true;
     ref.read(lastStartedDhikrIdProvider.notifier).remember(dhikr.id);
     unawaited(_persistActiveSession());
     unawaited(
       ref
-          .read(analyticsServiceProvider)
-          .logEvent('counter_start', parameters: {'dhikr_id': dhikr.id}),
+          .read(appDatabaseProvider)
+          .updateCounterSessionTarget(
+            sessionId: resolvedSessionId,
+            dhikrId: dhikr.id,
+            dhikrName: dhikr.name,
+            count: resolvedCount,
+            target: resolvedTarget,
+            completed: completed,
+          ),
+    );
+    unawaited(
+      _logDhikrEvent(
+        'dhikr_started',
+        dhikr: dhikr,
+        target: resolvedTarget,
+        count: resolvedCount,
+      ),
     );
   }
 
   void setTarget(int target) {
+    final previousTarget = state.target;
     state = state.copyWith(target: target, completed: false);
     _changedBeforeRestore = true;
     unawaited(_persistActiveSession());
+    unawaited(
+      ref
+          .read(appDatabaseProvider)
+          .updateCounterSessionTarget(
+            sessionId: state.sessionId,
+            dhikrId: state.activeDhikr.id,
+            dhikrName: state.activeDhikr.name,
+            count: state.count,
+            target: target,
+            completed: false,
+          ),
+    );
+    if (previousTarget != target) {
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .logEvent(
+              'target_changed',
+              parameters: {
+                'dhikr_id': _analyticsText(state.activeDhikr.id),
+                'dhikr_name': _analyticsText(state.activeDhikr.name),
+                'dhikr_category': _analyticsText(state.activeDhikr.category),
+                'previous_target_count': previousTarget,
+                'target_count': target,
+                'is_builtin': state.activeDhikr.isBuiltIn,
+              },
+            ),
+      );
+    }
   }
 
   void increment({bool useTesbihFeedback = false}) {
@@ -110,15 +171,27 @@ class CounterController extends Notifier<CounterState> {
     unawaited(
       ref
           .read(appDatabaseProvider)
-          .logCounterEvent(
+          .recordCounterProgress(
+            sessionId: state.sessionId,
             dhikrId: state.activeDhikr.id,
             dhikrName: state.activeDhikr.name,
             delta: 1,
             countAfter: nextCount,
             target: state.target,
-            eventType: completed ? 'completed' : 'increment',
+            completed: completed,
           ),
     );
+
+    if (completed) {
+      unawaited(
+        _logDhikrEvent(
+          'dhikr_completed',
+          dhikr: state.activeDhikr,
+          target: state.target,
+          count: nextCount,
+        ),
+      );
+    }
   }
 
   void decrement() {
@@ -131,32 +204,29 @@ class CounterController extends Notifier<CounterState> {
     unawaited(
       ref
           .read(appDatabaseProvider)
-          .logCounterEvent(
+          .recordCounterProgress(
+            sessionId: state.sessionId,
             dhikrId: state.activeDhikr.id,
             dhikrName: state.activeDhikr.name,
             delta: -1,
             countAfter: nextCount,
             target: state.target,
-            eventType: 'decrement',
+            completed: false,
           ),
     );
   }
 
   void reset() {
-    state = state.copyWith(count: 0, completed: false);
+    final previousSessionId = state.sessionId;
+    state = state.copyWith(
+      sessionId: _newSessionId(),
+      count: 0,
+      completed: false,
+    );
     _changedBeforeRestore = true;
     unawaited(_persistActiveSession());
     unawaited(
-      ref
-          .read(appDatabaseProvider)
-          .logCounterEvent(
-            dhikrId: state.activeDhikr.id,
-            dhikrName: state.activeDhikr.name,
-            delta: 0,
-            countAfter: 0,
-            target: state.target,
-            eventType: 'reset',
-          ),
+      ref.read(appDatabaseProvider).markCounterSessionReset(previousSessionId),
     );
   }
 
@@ -190,6 +260,7 @@ class CounterController extends Notifier<CounterState> {
     final dhikr = _knownDhikrById(dhikrId);
     if (dhikr == null) return null;
     return CounterState(
+      sessionId: _newSessionId(),
       activeDhikr: dhikr,
       count: 0,
       target: dhikr.defaultTarget,
@@ -216,6 +287,7 @@ class CounterController extends Notifier<CounterState> {
           : rawCount;
 
       return CounterState(
+        sessionId: _stringFromJson(json['sessionId']) ?? _newSessionId(),
         activeDhikr: dhikr,
         count: count,
         target: target,
@@ -231,6 +303,7 @@ class CounterController extends Notifier<CounterState> {
   String _stateToJson(CounterState state) {
     return jsonEncode({
       'activeDhikr': _dhikrToJson(state.activeDhikr),
+      'sessionId': state.sessionId,
       'count': state.count,
       'target': state.target,
     });
@@ -306,7 +379,38 @@ class CounterController extends Notifier<CounterState> {
   String? _nullableStringFromJson(Object? value) {
     return value is String && value.isNotEmpty ? value : null;
   }
+
+  String? _stringFromJson(Object? value) {
+    return value is String && value.isNotEmpty ? value : null;
+  }
+
+  Future<void> _logDhikrEvent(
+    String eventName, {
+    required DhikrItem dhikr,
+    required int target,
+    required int count,
+  }) {
+    return ref
+        .read(analyticsServiceProvider)
+        .logEvent(
+          eventName,
+          parameters: {
+            'dhikr_id': _analyticsText(dhikr.id),
+            'dhikr_name': _analyticsText(dhikr.name),
+            'dhikr_category': _analyticsText(dhikr.category),
+            'target_count': target,
+            'count': count,
+            'is_builtin': dhikr.isBuiltIn,
+          },
+        );
+  }
+
+  String _analyticsText(String value) {
+    return value.length > 100 ? value.substring(0, 100) : value;
+  }
 }
+
+String _newSessionId() => _uuid.v4();
 
 final counterControllerProvider =
     NotifierProvider<CounterController, CounterState>(CounterController.new);

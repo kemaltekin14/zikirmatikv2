@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "731860561020",
+    "project_id": "zikirmatik-pro-5ddb0",
+    "storage_bucket": "zikirmatik-pro-5ddb0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:731860561020:android:6da37d16d0952d04442df9",
+        "android_client_info": {
+          "package_name": "pro.kt.zikirmatikv2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD015t0Pwao5jAT_iC8ny3m9TpD8gX0lrY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

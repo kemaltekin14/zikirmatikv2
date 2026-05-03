@@ -7,10 +7,15 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'premium_tesbih_pull_layer.dart';
 import '../application/counter_controller.dart';
+import '../../../core/data/local/database_provider.dart';
+import '../../../core/services/app_services.dart';
 import '../../../core/services/interaction_feedback_service.dart';
+import '../../dhikr_library/application/dhikr_providers.dart';
+import '../../dhikr_library/domain/dhikr_item.dart';
 import '../../dhikr_library/presentation/dhikr_library_screen.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../../shared/layout/proportional_layout.dart';
@@ -44,7 +49,7 @@ const _contentHorizontalPadding = 24.0;
 const _topContentInset = 8.0;
 const _topNavHeight = 46.0;
 const _titleTopGap = 5.0;
-const _titleSectionHeight = 122.0;
+const _titleSectionHeight = 146.0;
 const _targetTopGap = 3.0;
 const _targetPillHeight = 31.0;
 const _counterTopGap = 2.0;
@@ -69,6 +74,63 @@ const _maxScreenScale = 1.10;
 const _minCompactScale = 0.88;
 const _progressAnimationDuration = Duration(milliseconds: 560);
 const _progressAnimationCurve = Curves.fastOutSlowIn;
+const _statisticsDailyTargetKey = 'statistics.target.daily';
+
+final _dailyGoalProgressProvider =
+    StreamProvider.autoDispose<_DailyGoalProgress>((ref) async* {
+      final database = ref.watch(appDatabaseProvider);
+      final prefs = await SharedPreferences.getInstance();
+      final dailyTarget = prefs.getInt(_statisticsDailyTargetKey);
+      if (dailyTarget == null || dailyTarget <= 0) {
+        yield const _DailyGoalProgress(total: 0);
+        return;
+      }
+
+      await for (final buckets in database.watchCounterStatBuckets()) {
+        final today = _counterDateOnly(DateTime.now());
+        final tomorrow = today.add(const Duration(days: 1));
+        final total = buckets.fold<int>(0, (sum, bucket) {
+          if (bucket.count <= 0 ||
+              bucket.bucketStart.isBefore(today) ||
+              !bucket.bucketStart.isBefore(tomorrow)) {
+            return sum;
+          }
+
+          return sum + bucket.count;
+        });
+
+        yield _DailyGoalProgress(total: total, target: dailyTarget);
+      }
+    });
+
+class _DailyGoalProgress {
+  const _DailyGoalProgress({required this.total, this.target});
+
+  final int total;
+  final int? target;
+
+  bool get completed {
+    final target = this.target;
+    return target != null && total >= target;
+  }
+}
+
+DateTime _counterDateOnly(DateTime date) =>
+    DateTime(date.year, date.month, date.day);
+
+String _formatCounterWholeNumber(int value) {
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < raw.length; i++) {
+    final remaining = raw.length - i;
+    buffer.write(raw[i]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+
+  return buffer.toString();
+}
 
 class ZikrCounterScreen extends ConsumerStatefulWidget {
   const ZikrCounterScreen({super.key});
@@ -84,6 +146,7 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
   var _tesbihModeEnabled = false;
   Offset? _sonarCenter;
   var _sonarRingRadius = 0.0;
+  OverlayEntry? _dailyGoalNoticeEntry;
 
   @override
   void initState() {
@@ -97,12 +160,31 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
 
   @override
   void dispose() {
+    _dailyGoalNoticeEntry?.remove();
+    _dailyGoalNoticeEntry = null;
     _sonarController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<_DailyGoalProgress>>(_dailyGoalProgressProvider, (
+      previous,
+      next,
+    ) {
+      final previousProgress = previous?.asData?.value;
+      final nextProgress = next.asData?.value;
+      if (!mounted ||
+          previousProgress == null ||
+          nextProgress == null ||
+          previousProgress.completed ||
+          !nextProgress.completed) {
+        return;
+      }
+
+      _showDailyGoalNotice(nextProgress);
+    });
+
     ref.listen<int>(counterControllerProvider.select((state) => state.target), (
       previous,
       next,
@@ -113,6 +195,17 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
 
     final counter = ref.watch(counterControllerProvider);
     final settings = ref.watch(settingsControllerProvider);
+    final activeDhikr = ref
+        .watch(dhikrItemsProvider)
+        .maybeWhen(
+          data: (items) {
+            for (final item in items) {
+              if (item.id == counter.activeDhikr.id) return item;
+            }
+            return counter.activeDhikr;
+          },
+          orElse: () => counter.activeDhikr,
+        );
     final media = MediaQuery.of(context);
     final scale = _counterScaleFor(media.size.width);
     final contentWidth = math.min(media.size.width, _contentMaxWidth * scale);
@@ -227,13 +320,16 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                               _TopNavigationArea(
                                 scale: scale,
                                 height: y(_topNavHeight, min: 42, max: 48),
+                                isFavorite: activeDhikr.isFavorite,
+                                onFavoritePressed: () =>
+                                    unawaited(_toggleFavorite(activeDhikr)),
                               ),
                               SizedBox(height: y(_titleTopGap, min: 3, max: 6)),
                               SizedBox(
                                 height: y(
                                   _titleSectionHeight,
-                                  min: 112,
-                                  max: 130,
+                                  min: 132,
+                                  max: 154,
                                 ),
                                 child: Transform.translate(
                                   offset: Offset(0, -titleVisualLift),
@@ -241,10 +337,9 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                                     onTap: _openDhikrLibrary,
                                     child: _ZikrTitleSection(
                                       scale: scale,
-                                      name: counter.activeDhikr.name,
-                                      arabicText:
-                                          counter.activeDhikr.arabicText,
-                                      meaning: counter.activeDhikr.meaning,
+                                      name: activeDhikr.name,
+                                      arabicText: activeDhikr.arabicText,
+                                      meaning: activeDhikr.meaning,
                                     ),
                                   ),
                                 ),
@@ -372,7 +467,7 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
                   scale: scale,
                   count: counter.count,
                   target: counter.target,
-                  dhikrName: counter.activeDhikr.name,
+                  dhikrName: activeDhikr.name,
                   onDismiss: ref
                       .read(counterControllerProvider.notifier)
                       .dismissCompletion,
@@ -449,6 +544,35 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
     ref.read(counterControllerProvider.notifier).reset();
   }
 
+  void _showDailyGoalNotice(_DailyGoalProgress progress) {
+    final target = progress.target;
+    if (target == null) return;
+
+    final media = MediaQuery.of(context);
+    final scale = _counterScaleFor(media.size.width);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+
+    _dailyGoalNoticeEntry?.remove();
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _DailyGoalNoticeOverlay(
+        scale: scale,
+        topInset: media.padding.top,
+        total: progress.total,
+        target: target,
+        onDismissed: () {
+          if (_dailyGoalNoticeEntry == entry) {
+            _dailyGoalNoticeEntry = null;
+          }
+          entry.remove();
+        },
+      ),
+    );
+    _dailyGoalNoticeEntry = entry;
+    overlay.insert(entry);
+  }
+
   void _decrementCounter() {
     ref.read(counterControllerProvider.notifier).decrement();
   }
@@ -465,6 +589,42 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
     ref.read(settingsControllerProvider.notifier).toggleSound();
   }
 
+  Future<void> _toggleFavorite(DhikrItem item) async {
+    ref.read(interactionFeedbackServiceProvider).selection();
+    final isAdding = !item.isFavorite;
+    if (item.isBuiltIn) {
+      ref.read(settingsControllerProvider.notifier).toggleFavorite(item.id);
+      _logFavoriteChange(item, isAdding: isAdding);
+      return;
+    }
+
+    await ref
+        .read(dhikrRepositoryProvider)
+        .setCustomDhikrFavorite(id: item.id, isFavorite: !item.isFavorite);
+    _logFavoriteChange(item, isAdding: isAdding);
+  }
+
+  void _logFavoriteChange(DhikrItem item, {required bool isAdding}) {
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .logEvent(
+            isAdding ? 'favorite_added' : 'favorite_removed',
+            parameters: {
+              'source': 'counter',
+              'dhikr_id': _analyticsText(item.id),
+              'dhikr_name': _analyticsText(item.name),
+              'dhikr_category': _analyticsText(item.category),
+              'is_builtin': item.isBuiltIn,
+            },
+          ),
+    );
+  }
+
+  String _analyticsText(String value) {
+    return value.length > 100 ? value.substring(0, 100) : value;
+  }
+
   double? _progressFor(int count, int target) {
     if (target == _infiniteTarget) return null;
     return (count / target).clamp(0, 1).toDouble();
@@ -474,6 +634,100 @@ class _ZikrCounterScreenState extends ConsumerState<ZikrCounterScreen>
     return (screenWidth / appLayoutBaselineWidth)
         .clamp(_minScreenScale, _maxScreenScale)
         .toDouble();
+  }
+}
+
+class _DailyGoalNoticeOverlay extends StatefulWidget {
+  const _DailyGoalNoticeOverlay({
+    required this.scale,
+    required this.topInset,
+    required this.total,
+    required this.target,
+    required this.onDismissed,
+  });
+
+  final double scale;
+  final double topInset;
+  final int total;
+  final int target;
+  final VoidCallback onDismissed;
+
+  @override
+  State<_DailyGoalNoticeOverlay> createState() =>
+      _DailyGoalNoticeOverlayState();
+}
+
+class _DailyGoalNoticeOverlayState extends State<_DailyGoalNoticeOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+  Timer? _dismissTimer;
+  var _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 430),
+      reverseDuration: const Duration(milliseconds: 240),
+    );
+    _slide = Tween<Offset>(begin: const Offset(0, -1.16), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _controller.forward();
+    _dismissTimer = Timer(const Duration(milliseconds: 3600), _dismiss);
+  }
+
+  @override
+  void dispose() {
+    _dismissTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _dismiss() {
+    if (_closing) return;
+    _closing = true;
+    _controller.reverse().whenComplete(widget.onDismissed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: widget.topInset + 12 * widget.scale,
+      left: 18 * widget.scale,
+      right: 18 * widget.scale,
+      child: SlideTransition(
+        position: _slide,
+        child: FadeTransition(
+          opacity: _fade,
+          child: Material(
+            color: Colors.transparent,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _dismiss,
+              child: _DailyGoalSnackContent(
+                scale: widget.scale,
+                total: widget.total,
+                target: widget.target,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -491,10 +745,17 @@ class _CounterBackgroundLayer extends StatelessWidget {
 }
 
 class _TopNavigationArea extends StatelessWidget {
-  const _TopNavigationArea({required this.scale, required this.height});
+  const _TopNavigationArea({
+    required this.scale,
+    required this.height,
+    required this.isFavorite,
+    required this.onFavoritePressed,
+  });
 
   final double scale;
   final double height;
+  final bool isFavorite;
+  final VoidCallback onFavoritePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -511,10 +772,10 @@ class _TopNavigationArea extends StatelessWidget {
           const Spacer(),
           _CounterNavButton(
             scale: scale,
-            icon: Icons.star_rounded,
-            tooltip: 'Favori',
-            color: const Color(0xFFE5B12E),
-            onPressed: () {},
+            icon: isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+            tooltip: isFavorite ? 'Favoriden çıkar' : 'Favoriye ekle',
+            color: isFavorite ? const Color(0xFFE5B12E) : _primaryGreen,
+            onPressed: onFavoritePressed,
           ),
         ],
       ),
@@ -593,72 +854,59 @@ class _ZikrTitleSection extends StatelessWidget {
         width: titleWidth,
         child: FittedBox(
           fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (displayArabic != null && displayArabic.isNotEmpty)
-                Text(
-                  displayArabic,
-                  maxLines: 1,
+          child: SizedBox(
+            width: titleWidth,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (displayArabic != null && displayArabic.isNotEmpty)
+                  _CounterArabicTitleText(
+                    scale: scale,
+                    text: displayArabic,
+                    fontSize: arabicFontSize,
+                  ),
+                SizedBox(height: 4 * gapScale),
+                _PremiumShimmerText(
+                  name,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
                   style: TextStyle(
-                    color: _arabicTitleColor,
-                    fontFamily: 'Amiri',
-                    fontSize: arabicFontSize,
-                    fontWeight: FontWeight.w700,
-                    height: 1.04,
+                    color: _latinTitleColor,
+                    fontFamily: 'Crimson Pro',
+                    fontSize: latinFontSize,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
                     shadows: [
                       Shadow(
-                        color: _mutedGold.withValues(alpha: 0.20),
+                        color: _deepGreen.withValues(alpha: 0.14),
                         blurRadius: 4 * scale,
-                        offset: Offset(0, 1 * scale),
+                        offset: Offset(0, 1.2 * scale),
                       ),
                     ],
                   ),
                 ),
-              SizedBox(height: 4 * gapScale),
-              _PremiumShimmerText(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _latinTitleColor,
-                  fontFamily: 'EB Garamond',
-                  fontSize: latinFontSize,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0,
-                  shadows: [
-                    Shadow(
-                      color: _deepGreen.withValues(alpha: 0.14),
-                      blurRadius: 4 * scale,
-                      offset: Offset(0, 1.2 * scale),
-                    ),
-                  ],
+                SizedBox(height: 5 * gapScale),
+                _TitleDivider(scale: scale),
+                SizedBox(height: 6 * gapScale),
+                Text(
+                  displayMeaning == null || displayMeaning.isEmpty
+                      ? ''
+                      : displayMeaning,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _primaryGreen.withValues(alpha: 0.88),
+                    fontSize: meaningFontSize,
+                    fontWeight: FontWeight.w600,
+                    height: 1.24,
+                  ),
                 ),
-              ),
-              SizedBox(height: 5 * gapScale),
-              _TitleDivider(scale: scale),
-              SizedBox(height: 6 * gapScale),
-              Text(
-                displayMeaning == null || displayMeaning.isEmpty
-                    ? ''
-                    : displayMeaning,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _primaryGreen.withValues(alpha: 0.88),
-                  fontSize: meaningFontSize,
-                  fontWeight: FontWeight.w600,
-                  height: 1.24,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -673,6 +921,139 @@ class _ZikrTitleSection extends StatelessWidget {
   }) {
     return (screenWidth * factor).clamp(min, max).toDouble();
   }
+}
+
+class _CounterArabicTitleText extends StatefulWidget {
+  const _CounterArabicTitleText({
+    required this.scale,
+    required this.text,
+    required this.fontSize,
+  });
+
+  final double scale;
+  final String text;
+  final double fontSize;
+
+  @override
+  State<_CounterArabicTitleText> createState() =>
+      _CounterArabicTitleTextState();
+}
+
+class _CounterArabicTitleTextState extends State<_CounterArabicTitleText>
+    with SingleTickerProviderStateMixin {
+  var _expanded = false;
+
+  @override
+  void didUpdateWidget(covariant _CounterArabicTitleText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _expanded = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final collapsedWidth = constraints.maxWidth * 0.58;
+        final collapsedStyle = _counterArabicTitleStyle(
+          scale: widget.scale,
+          fontSize: widget.fontSize,
+          expanded: false,
+          compactCollapsed: false,
+        );
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: collapsedStyle),
+          maxLines: 1,
+          textDirection: TextDirection.rtl,
+        )..layout(maxWidth: collapsedWidth);
+        final needsToggle = painter.didExceedMaxLines;
+        final maxWidth = _expanded
+            ? constraints.maxWidth * 0.86
+            : collapsedWidth;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Text(
+                  widget.text,
+                  maxLines: _expanded ? 3 : 1,
+                  overflow: _expanded
+                      ? TextOverflow.fade
+                      : TextOverflow.ellipsis,
+                  softWrap: _expanded,
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
+                  style: _counterArabicTitleStyle(
+                    scale: widget.scale,
+                    fontSize: widget.fontSize,
+                    expanded: _expanded,
+                    compactCollapsed: needsToggle && !_expanded,
+                  ),
+                ),
+              ),
+            ),
+            if (needsToggle) ...[
+              SizedBox(height: 2 * widget.scale),
+              TextButton.icon(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  foregroundColor: _primaryGreen,
+                  visualDensity: VisualDensity.compact,
+                  minimumSize: Size(0, 20 * widget.scale),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8 * widget.scale,
+                    vertical: 1,
+                  ),
+                  textStyle: TextStyle(
+                    fontSize: (9.2 * widget.scale).clamp(8.8, 10.2),
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+                icon: Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.menu_book_rounded,
+                  size: (11.5 * widget.scale).clamp(10.8, 12.8),
+                ),
+                label: Text(_expanded ? 'Metni kapat' : 'Metni aç'),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+TextStyle _counterArabicTitleStyle({
+  required double scale,
+  required double fontSize,
+  required bool expanded,
+  required bool compactCollapsed,
+}) {
+  return TextStyle(
+    color: _arabicTitleColor,
+    fontFamily: 'Amiri',
+    fontSize: expanded || compactCollapsed ? fontSize * 0.68 : fontSize,
+    fontWeight: FontWeight.w700,
+    height: expanded ? 1.18 : 1.04,
+    shadows: [
+      Shadow(
+        color: _mutedGold.withValues(alpha: 0.20),
+        blurRadius: 4 * scale,
+        offset: Offset(0, 1 * scale),
+      ),
+    ],
+  );
 }
 
 class _PremiumShimmerText extends StatefulWidget {
@@ -697,21 +1078,67 @@ class _PremiumShimmerText extends StatefulWidget {
 class _PremiumShimmerTextState extends State<_PremiumShimmerText>
     with SingleTickerProviderStateMixin {
   static const _cycleDuration = Duration(milliseconds: 6400);
-  static const _sweepWindow = 0.375;
+  static const _sweepDuration = Duration(milliseconds: 2400);
 
   late final AnimationController _controller;
+  Timer? _cycleTimer;
+  var _animationsEnabled = false;
+  var _sweepActive = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: _cycleDuration)
-      ..repeat();
+    _controller = AnimationController(vsync: this, duration: _sweepDuration);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shouldAnimate = !MediaQuery.disableAnimationsOf(context);
+    if (_animationsEnabled == shouldAnimate) return;
+
+    _animationsEnabled = shouldAnimate;
+    if (shouldAnimate) {
+      _startSweepCycle();
+    } else {
+      _stopSweepCycle();
+    }
   }
 
   @override
   void dispose() {
+    _cycleTimer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _startSweepCycle() {
+    _cycleTimer?.cancel();
+    if (!_animationsEnabled || !mounted) return;
+
+    _setSweepActive(true);
+    _controller.forward(from: 0).whenComplete(() {
+      if (!mounted || !_animationsEnabled) return;
+      _setSweepActive(false);
+      _cycleTimer = Timer(_cycleDuration - _sweepDuration, _startSweepCycle);
+    });
+  }
+
+  void _stopSweepCycle() {
+    _cycleTimer?.cancel();
+    _controller
+      ..stop()
+      ..value = 0;
+    _setSweepActive(false);
+  }
+
+  void _setSweepActive(bool active) {
+    if (_sweepActive == active) return;
+    if (mounted) {
+      setState(() => _sweepActive = active);
+    } else {
+      _sweepActive = active;
+    }
   }
 
   @override
@@ -738,16 +1165,14 @@ class _PremiumShimmerTextState extends State<_PremiumShimmerText>
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, child) {
-            final isSweeping = _controller.value <= _sweepWindow;
-            final sweepRatio = (_controller.value / _sweepWindow)
+            final shimmerProgress = _controller.value
                 .clamp(0.0, 1.0)
                 .toDouble();
-            final shimmerProgress = sweepRatio;
             final glowStyle = widget.style.copyWith(
               color: baseColor,
               shadows: [
                 ...?widget.style.shadows,
-                if (isSweeping)
+                if (_sweepActive)
                   Shadow(
                     color: _latinTitleGlowColor.withValues(alpha: 0.11),
                     blurRadius: 6.2 * scale,
@@ -766,7 +1191,7 @@ class _PremiumShimmerTextState extends State<_PremiumShimmerText>
                   textAlign: widget.textAlign,
                   style: glowStyle,
                 ),
-                if (isSweeping)
+                if (_sweepActive)
                   ShaderMask(
                     blendMode: BlendMode.srcIn,
                     shaderCallback: (bounds) {
@@ -2603,6 +3028,168 @@ class _CounterSonarPainter extends CustomPainter {
         oldDelegate.center != center ||
         oldDelegate.ringRadius != ringRadius ||
         oldDelegate.scale != scale;
+  }
+}
+
+class _DailyGoalSnackContent extends StatelessWidget {
+  const _DailyGoalSnackContent({
+    required this.scale,
+    required this.total,
+    required this.target,
+  });
+
+  final double scale;
+  final int total;
+  final int target;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF123B2B), Color(0xFF2E7653)],
+        ),
+        borderRadius: BorderRadius.circular(18 * scale),
+        border: Border.all(
+          color: _gold.withValues(alpha: 0.56),
+          width: 0.9 * scale,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _deepGreen.withValues(alpha: 0.24),
+            blurRadius: 20 * scale,
+            offset: Offset(0, 9 * scale),
+          ),
+          BoxShadow(
+            color: _gold.withValues(alpha: 0.13),
+            blurRadius: 18 * scale,
+            offset: Offset.zero,
+          ),
+        ],
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: 82 * scale),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            14 * scale,
+            13 * scale,
+            14 * scale,
+            13 * scale,
+          ),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _cream.withValues(alpha: 0.15),
+                  border: Border.all(
+                    color: _gold.withValues(alpha: 0.62),
+                    width: 0.9 * scale,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _gold.withValues(alpha: 0.16),
+                      blurRadius: 11 * scale,
+                      offset: Offset.zero,
+                    ),
+                  ],
+                ),
+                child: SizedBox.square(
+                  dimension: 45 * scale,
+                  child: Icon(
+                    Icons.check_rounded,
+                    color: const Color(0xFFF2DE9B),
+                    size: 27 * scale,
+                  ),
+                ),
+              ),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Günlük hedef tamam',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: (14.2 * scale)
+                                  .clamp(13.0, 15.8)
+                                  .toDouble(),
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8 * scale),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: _gold.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: _gold.withValues(alpha: 0.32),
+                              width: 0.7 * scale,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 7 * scale,
+                              vertical: 4 * scale,
+                            ),
+                            child: Text(
+                              'Maşallah',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFFF2DE9B),
+                                fontSize: (9 * scale)
+                                    .clamp(8.2, 10.2)
+                                    .toDouble(),
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 7 * scale),
+                    Text(
+                      'Bugün ${_formatCounterWholeNumber(total)} / ${_formatCounterWholeNumber(target)} zikir kaydedildi.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: const Color(0xFFF2DE9B).withValues(alpha: 0.92),
+                        fontSize: (10.9 * scale).clamp(10.0, 12.1).toDouble(),
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
+                    ),
+                    SizedBox(height: 8 * scale),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: 1,
+                        minHeight: 3.4 * scale,
+                        color: _gold,
+                        backgroundColor: Colors.white.withValues(alpha: 0.16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

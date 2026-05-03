@@ -37,6 +37,7 @@ class InteractionFeedbackService {
         amplitude: 205,
         fallback: HapticFeedback.mediumImpact,
       ),
+      sound: _nativeCounterTickSound,
     );
   }
 
@@ -109,6 +110,10 @@ class InteractionFeedbackService {
 
   Future<void> _nativeSuccessSound() {
     return _nativeFeedbackChannel.invokeMethod<void>('playSuccessSound');
+  }
+
+  Future<void> _nativeCounterTickSound() {
+    return _nativeFeedbackChannel.invokeMethod<void>('playCounterTickSound');
   }
 
   Future<void> _nativeBeadCollisionSound() {

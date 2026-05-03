@@ -23,6 +23,8 @@ class EsmaItem {
   final int ebcedNumber;
   final String? explanation;
 
+  bool get hasDisplayNumber => number > 0;
+
   EsmaCategoryIcon get categoryIcon {
     return switch (category) {
       'Rahmet' => EsmaCategoryIcon.heart,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_router.dart';
+import '../../../core/services/app_services.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../../shared/layout/proportional_layout.dart';
 import '../../counter/application/counter_controller.dart';
@@ -34,6 +36,36 @@ const _fixedTargetOptions = [33, 99, 100];
 const _detailTopBackgroundAsset = 'assets/images/zikir-arka3.webp';
 const _meaningCardBackgroundAsset = 'assets/images/tablo-arka.webp';
 const _sheetDismissToCounterDelay = Duration(milliseconds: 420);
+
+Future<void> _toggleFavoriteFromDetail(WidgetRef ref, DhikrItem item) async {
+  final isAdding = !item.isFavorite;
+  if (item.isBuiltIn) {
+    ref.read(settingsControllerProvider.notifier).toggleFavorite(item.id);
+  } else {
+    await ref
+        .read(dhikrRepositoryProvider)
+        .setCustomDhikrFavorite(id: item.id, isFavorite: isAdding);
+  }
+
+  unawaited(
+    ref
+        .read(analyticsServiceProvider)
+        .logEvent(
+          isAdding ? 'favorite_added' : 'favorite_removed',
+          parameters: {
+            'source': 'dhikr_detail',
+            'dhikr_id': _analyticsText(item.id),
+            'dhikr_name': _analyticsText(item.name),
+            'dhikr_category': _analyticsText(item.category),
+            'is_builtin': item.isBuiltIn,
+          },
+        ),
+  );
+}
+
+String _analyticsText(String value) {
+  return value.length > 100 ? value.substring(0, 100) : value;
+}
 
 class DhikrDetailScreen extends ConsumerStatefulWidget {
   const DhikrDetailScreen({
@@ -379,9 +411,7 @@ class _TopBar extends ConsumerWidget {
               ? _gold.withValues(alpha: 0.22)
               : Colors.white.withValues(alpha: 0.58),
           onTap: () {
-            ref
-                .read(settingsControllerProvider.notifier)
-                .toggleFavorite(item.id);
+            unawaited(_toggleFavoriteFromDetail(ref, item));
             ref.read(interactionFeedbackServiceProvider).selection();
           },
         ),
@@ -466,50 +496,14 @@ class _HeroPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
-          ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (bounds) => const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _transliterationGold,
-                _transliterationGoldHighlight,
-                _transliterationGoldShadow,
-              ],
-              stops: [0, 0.45, 1],
-            ).createShader(bounds),
-            child: Text(
-              detail.arabic,
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
-              style: TextStyle(
-                color: _transliterationGold,
-                fontFamily: 'Amiri',
-                fontSize: 34 * scale,
-                fontWeight: FontWeight.w700,
-                height: 1.18,
-                shadows: [
-                  Shadow(
-                    color: _deepGreen.withValues(alpha: 0.36),
-                    blurRadius: 2.5 * scale,
-                    offset: Offset(0, 1.1 * scale),
-                  ),
-                  Shadow(
-                    color: _transliterationGoldShadow.withValues(alpha: 0.22),
-                    blurRadius: 7 * scale,
-                    offset: Offset(0, 2.2 * scale),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _ArabicHeroText(scale: scale, text: detail.arabic),
           SizedBox(height: 5 * scale),
           Text(
             detail.transliteration,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _arabicHeroGreen,
-              fontFamily: 'EB Garamond',
+              fontFamily: 'Crimson Pro',
               fontSize: 27 * scale,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w800,
@@ -540,6 +534,178 @@ class _HeroPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ArabicHeroText extends StatefulWidget {
+  const _ArabicHeroText({required this.scale, required this.text});
+
+  final double scale;
+  final String text;
+
+  @override
+  State<_ArabicHeroText> createState() => _ArabicHeroTextState();
+}
+
+class _ArabicHeroTextState extends State<_ArabicHeroText>
+    with SingleTickerProviderStateMixin {
+  var _expanded = false;
+
+  @override
+  void didUpdateWidget(covariant _ArabicHeroText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _expanded = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = widget.scale;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final collapsedWidth = constraints.maxWidth * 0.58;
+        final collapsedStyle = _arabicHeroStyle(scale, expanded: false);
+        final textPainter = TextPainter(
+          text: TextSpan(text: widget.text, style: collapsedStyle),
+          maxLines: 1,
+          textDirection: TextDirection.rtl,
+        )..layout(maxWidth: collapsedWidth);
+        final needsToggle = textPainter.didExceedMaxLines;
+        final maxWidth = _expanded
+            ? constraints.maxWidth * 0.82
+            : collapsedWidth;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: _ArabicGradientText(
+                  text: widget.text,
+                  style: _arabicHeroStyle(scale, expanded: _expanded),
+                  maxLines: _expanded ? 4 : 1,
+                  overflow: _expanded
+                      ? TextOverflow.fade
+                      : TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            if (needsToggle) ...[
+              SizedBox(height: 3 * scale),
+              _ArabicTextToggleButton(
+                scale: scale,
+                expanded: _expanded,
+                onTap: () => setState(() => _expanded = !_expanded),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ArabicGradientText extends StatelessWidget {
+  const _ArabicGradientText({
+    required this.text,
+    required this.style,
+    required this.maxLines,
+    required this.overflow,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+  final TextOverflow overflow;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          _transliterationGold,
+          _transliterationGoldHighlight,
+          _transliterationGoldShadow,
+        ],
+        stops: [0, 0.45, 1],
+      ).createShader(bounds),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.rtl,
+        maxLines: maxLines,
+        overflow: overflow,
+        softWrap: maxLines > 1,
+        style: style,
+      ),
+    );
+  }
+}
+
+class _ArabicTextToggleButton extends StatelessWidget {
+  const _ArabicTextToggleButton({
+    required this.scale,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final double scale;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: _primaryGreen,
+        visualDensity: VisualDensity.compact,
+        minimumSize: Size(0, 24 * scale),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 2),
+        textStyle: TextStyle(
+          fontSize: 10.2 * scale,
+          fontWeight: FontWeight.w800,
+          height: 1,
+        ),
+      ),
+      icon: Icon(
+        expanded ? Icons.keyboard_arrow_up_rounded : Icons.menu_book_rounded,
+        size: 13 * scale,
+      ),
+      label: Text(expanded ? 'Metni kapat' : 'Metni aç'),
+    );
+  }
+}
+
+TextStyle _arabicHeroStyle(double scale, {required bool expanded}) {
+  return TextStyle(
+    color: _transliterationGold,
+    fontFamily: 'Amiri',
+    fontSize: (expanded ? 22.5 : 34) * scale,
+    fontWeight: FontWeight.w700,
+    height: expanded ? 1.32 : 1.18,
+    shadows: [
+      Shadow(
+        color: _deepGreen.withValues(alpha: 0.36),
+        blurRadius: 2.5 * scale,
+        offset: Offset(0, 1.1 * scale),
+      ),
+      Shadow(
+        color: _transliterationGoldShadow.withValues(alpha: 0.22),
+        blurRadius: 7 * scale,
+        offset: Offset(0, 2.2 * scale),
+      ),
+    ],
+  );
 }
 
 class _HeroDivider extends StatelessWidget {
@@ -1458,7 +1624,7 @@ class _DhikrDetailContent {
         transliteration: 'Sübhânallâh',
         shortMeaning: 'Allah’ı her türlü noksanlıktan tenzih ederim.',
         longMeaning:
-            'Kalbin Rabbine duyduğu hayretin ilk sözüdür. Mümin, kainatın her zerresinde O’nun kudretini görür ve “Rabbim her türlü eksiklikten münezzehtir” der. Dile hafif, mizanda ağır olan bu kelime, gönüldeki tevhid nuruna tercüman olur.',
+            'Kalbin Rabbine duyduğu hayretin ilk sözüdür. Mümin, kâinatın her zerresinde O’nun kudretini görür ve “Rabbim her türlü eksiklikten münezzehtir” der. Dile hafif, mizanda ağır olan bu kelime, gönüldeki tevhid nuruna tercüman olur.',
       );
     }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,11 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_router.dart';
+import '../../../core/services/app_services.dart';
 import '../../../core/services/interaction_feedback_service.dart';
 import '../../../shared/layout/proportional_layout.dart';
 import '../../../shared/widgets/app_menu_drawer.dart';
 import '../../counter/application/counter_controller.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
+import '../application/esma_audio_service.dart';
 import '../data/esma_data.dart';
 import '../domain/esma_item.dart';
 
@@ -45,6 +48,10 @@ const _categoryFilters = [
   'Yaratılış',
 ];
 
+String _analyticsText(String value) {
+  return value.length > 100 ? value.substring(0, 100) : value;
+}
+
 double _bottomNavBottomOffset(double safeBottom, double scale) {
   final visualSafeInset = math.min(safeBottom, _bottomNavMaxSafeInset * scale);
   return _bottomNavBaseGap * scale + visualSafeInset;
@@ -70,7 +77,9 @@ String _normalizeSearch(String value) {
 }
 
 class EsmaScreen extends ConsumerStatefulWidget {
-  const EsmaScreen({super.key});
+  const EsmaScreen({super.key, this.initialExpandedNumber});
+
+  final int? initialExpandedNumber;
 
   @override
   ConsumerState<EsmaScreen> createState() => _EsmaScreenState();
@@ -78,20 +87,51 @@ class EsmaScreen extends ConsumerStatefulWidget {
 
 class _EsmaScreenState extends ConsumerState<EsmaScreen> {
   late final TextEditingController _searchController;
+  late final EsmaAudioService _audioService;
   String _query = '';
   String? _selectedCategory;
-  int _expandedNumber = 1;
+  late int _expandedNumber;
   final Set<int> _favoriteNumbers = {};
   final Map<int, GlobalKey> _cardKeys = {};
+  Timer? _searchAnalyticsDebounce;
+  String? _lastLoggedSearchQuery;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _audioService = EsmaAudioService();
+    _expandedNumber = _validInitialExpandedNumber(widget.initialExpandedNumber);
+    if (widget.initialExpandedNumber != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollExpandedCardIntoView(
+          duration: const Duration(milliseconds: 520),
+        );
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant EsmaScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialExpandedNumber != widget.initialExpandedNumber) {
+      _expandedNumber = _validInitialExpandedNumber(
+        widget.initialExpandedNumber,
+      );
+      if (widget.initialExpandedNumber != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollExpandedCardIntoView(
+            duration: const Duration(milliseconds: 520),
+          );
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
+    _searchAnalyticsDebounce?.cancel();
+    unawaited(_audioService.dispose());
     _searchController.dispose();
     super.dispose();
   }
@@ -106,7 +146,7 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
       if (normalizedQuery.isEmpty) return true;
 
       final haystack = [
-        item.number.toString(),
+        if (item.hasDisplayNumber) item.number.toString(),
         item.name,
         item.meaning,
         item.category,
@@ -114,6 +154,15 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
       ].map(_normalizeSearch).join(' ');
       return haystack.contains(normalizedQuery);
     }).toList();
+  }
+
+  int _validInitialExpandedNumber(int? number) {
+    final requested = number;
+    if (requested != null &&
+        esmaItems.any((item) => item.number == requested)) {
+      return requested;
+    }
+    return esmaItems.first.number;
   }
 
   @override
@@ -159,18 +208,7 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
                       contentWidth: contentWidth,
                       horizontalInset: horizontalInset,
                       controller: _searchController,
-                      onChanged: (value) {
-                        setState(() {
-                          _query = value;
-                          final visibleItems = _filteredItems;
-                          if (visibleItems.isNotEmpty &&
-                              !visibleItems.any(
-                                (item) => item.number == _expandedNumber,
-                              )) {
-                            _expandedNumber = visibleItems.first.number;
-                          }
-                        });
-                      },
+                      onChanged: _handleSearchChanged,
                       selectedCategory: _selectedCategory,
                       onCategorySelected: (category) {
                         setState(() {
@@ -193,11 +231,8 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
                       favoriteNumbers: _favoriteNumbers,
                       cardKeys: _cardKeys,
                       onExpand: _expandEsma,
-                      onFavorite: (item) => setState(() {
-                        if (!_favoriteNumbers.add(item.number)) {
-                          _favoriteNumbers.remove(item.number);
-                        }
-                      }),
+                      onFavorite: _toggleEsmaFavorite,
+                      onListen: _listenEsma,
                       onStart: _startEsma,
                     ),
                   ],
@@ -216,6 +251,70 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
     );
   }
 
+  void _handleSearchChanged(String value) {
+    setState(() {
+      _query = value;
+      final visibleItems = _filteredItems;
+      if (visibleItems.isNotEmpty &&
+          !visibleItems.any((item) => item.number == _expandedNumber)) {
+        _expandedNumber = visibleItems.first.number;
+      }
+    });
+
+    _searchAnalyticsDebounce?.cancel();
+    final normalizedQuery = _normalizeSearch(value);
+    if (normalizedQuery.length < 2) {
+      return;
+    }
+
+    _searchAnalyticsDebounce = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted || _lastLoggedSearchQuery == normalizedQuery) return;
+      final resultCount = _filteredItems.length;
+      _lastLoggedSearchQuery = normalizedQuery;
+
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .logEvent(
+              'search_used',
+              parameters: {
+                'source': 'esma',
+                'query_length': value.trim().length,
+                'has_results': resultCount > 0,
+                'result_count': resultCount,
+                'category': _analyticsText(_selectedCategory ?? 'all'),
+              },
+            ),
+      );
+    });
+  }
+
+  void _toggleEsmaFavorite(EsmaItem item) {
+    final isAdding = !_favoriteNumbers.contains(item.number);
+    setState(() {
+      if (!_favoriteNumbers.add(item.number)) {
+        _favoriteNumbers.remove(item.number);
+      }
+    });
+
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .logEvent(
+            isAdding ? 'favorite_added' : 'favorite_removed',
+            parameters: {
+              'source': 'esma',
+              'dhikr_id': 'esma-${item.number}',
+              'dhikr_name': _analyticsText(item.dhikrName),
+              'dhikr_category': 'Esma-ul Husna',
+              'esma_name': _analyticsText(item.name),
+              'esma_number': item.number,
+              'is_builtin': true,
+            },
+          ),
+    );
+  }
+
   void _startEsma(EsmaItem item) {
     final feedback = ref.read(interactionFeedbackServiceProvider);
     ref.read(counterControllerProvider.notifier).startDhikr(item.toDhikr());
@@ -223,19 +322,54 @@ class _EsmaScreenState extends ConsumerState<EsmaScreen> {
     feedback.primaryAction();
   }
 
+  void _listenEsma(EsmaItem item) {
+    ref.read(interactionFeedbackServiceProvider).selection();
+    unawaited(_playEsmaAudio(item));
+  }
+
+  Future<void> _playEsmaAudio(EsmaItem item) async {
+    try {
+      await _audioService.play(item);
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .logEvent(
+              'esma_audio_played',
+              parameters: {
+                'esma_name': _analyticsText(item.name),
+                'esma_number': item.number,
+                'dhikr_id': 'esma-${item.number}',
+                'dhikr_name': _analyticsText(item.dhikrName),
+                'dhikr_category': 'Esma-ul Husna',
+              },
+            ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ses şu an çalınamadı.')));
+    }
+  }
+
   void _expandEsma(EsmaItem item) {
     setState(() => _expandedNumber = item.number);
     Future<void>.delayed(const Duration(milliseconds: 620), () {
       if (!mounted || _expandedNumber != item.number) return;
-      final cardContext = _cardKeys[item.number]?.currentContext;
-      if (cardContext == null || !cardContext.mounted) return;
-      Scrollable.ensureVisible(
-        cardContext,
-        alignment: 0.08,
-        duration: const Duration(milliseconds: 520),
-        curve: Curves.easeInOutCubic,
-      );
+      _scrollExpandedCardIntoView(duration: const Duration(milliseconds: 520));
     });
+  }
+
+  void _scrollExpandedCardIntoView({required Duration duration}) {
+    if (!mounted) return;
+    final cardContext = _cardKeys[_expandedNumber]?.currentContext;
+    if (cardContext == null || !cardContext.mounted) return;
+    Scrollable.ensureVisible(
+      cardContext,
+      alignment: 0.08,
+      duration: duration,
+      curve: Curves.easeInOutCubic,
+    );
   }
 }
 
@@ -297,7 +431,7 @@ class _EsmaTopSection extends StatelessWidget {
             _SectionHeader(
               scale: scale,
               horizontalInset: horizontalInset,
-              count: esmaItems.length,
+              count: esmaItems.where((item) => item.hasDisplayNumber).length,
             ),
             SizedBox(height: 10 * scale),
             _EsmaFilterRail(
@@ -551,6 +685,7 @@ class _HeroMenuButton extends StatelessWidget {
           ],
         ),
         child: IconButton(
+          enableFeedback: false,
           tooltip: 'Menü',
           onPressed: () => openAppMenu(context),
           icon: Icon(
@@ -710,12 +845,20 @@ class _EsmaFilterRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = <_EsmaFilterOption>[
-      _EsmaFilterOption(label: 'Tümü', value: null, count: esmaItems.length),
+      _EsmaFilterOption(
+        label: 'Tümü',
+        value: null,
+        count: esmaItems.where((item) => item.hasDisplayNumber).length,
+      ),
       ..._categoryFilters.map(
         (category) => _EsmaFilterOption(
           label: category,
           value: category,
-          count: esmaItems.where((item) => item.category == category).length,
+          count: esmaItems
+              .where(
+                (item) => item.category == category && item.hasDisplayNumber,
+              )
+              .length,
         ),
       ),
     ];
@@ -860,6 +1003,7 @@ class _EsmaMosaic extends StatelessWidget {
     required this.cardKeys,
     required this.onExpand,
     required this.onFavorite,
+    required this.onListen,
     required this.onStart,
   });
 
@@ -871,6 +1015,7 @@ class _EsmaMosaic extends StatelessWidget {
   final Map<int, GlobalKey> cardKeys;
   final ValueChanged<EsmaItem> onExpand;
   final ValueChanged<EsmaItem> onFavorite;
+  final ValueChanged<EsmaItem> onListen;
   final ValueChanged<EsmaItem> onStart;
 
   @override
@@ -935,6 +1080,7 @@ class _EsmaMosaic extends StatelessWidget {
                         favorite: favoriteNumbers.contains(slot.item.number),
                         onExpand: () => onExpand(slot.item),
                         onFavorite: () => onFavorite(slot.item),
+                        onListen: () => onListen(slot.item),
                         onStart: () => onStart(slot.item),
                       ),
                     ),
@@ -1075,6 +1221,7 @@ class _EsmaCard extends StatefulWidget {
     required this.favorite,
     required this.onExpand,
     required this.onFavorite,
+    required this.onListen,
     required this.onStart,
   });
 
@@ -1084,6 +1231,7 @@ class _EsmaCard extends StatefulWidget {
   final bool favorite;
   final VoidCallback onExpand;
   final VoidCallback onFavorite;
+  final VoidCallback onListen;
   final VoidCallback onStart;
 
   @override
@@ -1136,6 +1284,7 @@ class _EsmaCardState extends State<_EsmaCard> {
               scale: widget.scale,
               favorite: widget.favorite,
               onFavorite: widget.onFavorite,
+              onListen: widget.onListen,
               onStart: widget.onStart,
             ),
           )
@@ -1263,7 +1412,7 @@ class _CompactEsmaCardContent extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _NumberBadge(number: item.number, scale: scale),
+                    _EsmaIdentityBadge(item: item, scale: scale),
                     const Spacer(),
                     _FavoriteButton(
                       scale: scale,
@@ -1359,6 +1508,7 @@ class _ExpandedEsmaCardContent extends StatelessWidget {
     required this.scale,
     required this.favorite,
     required this.onFavorite,
+    required this.onListen,
     required this.onStart,
   });
 
@@ -1366,6 +1516,7 @@ class _ExpandedEsmaCardContent extends StatelessWidget {
   final double scale;
   final bool favorite;
   final VoidCallback onFavorite;
+  final VoidCallback onListen;
   final VoidCallback onStart;
 
   @override
@@ -1395,8 +1546,8 @@ class _ExpandedEsmaCardContent extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _NumberBadge(
-                    number: item.number,
+                  _EsmaIdentityBadge(
+                    item: item,
                     scale: scale,
                     highlighted: true,
                     size: 42,
@@ -1508,6 +1659,7 @@ class _ExpandedEsmaCardContent extends StatelessWidget {
                         backgroundColor: _paleSage.withValues(alpha: 0.78),
                         foregroundColor: _primaryGreen,
                         borderColor: Colors.white.withValues(alpha: 0.62),
+                        onTap: onListen,
                       ),
                       _EsmaActionPill(
                         scale: scale,
@@ -1603,6 +1755,7 @@ class _EsmaActionPill extends StatelessWidget {
     required this.backgroundColor,
     required this.foregroundColor,
     required this.borderColor,
+    this.onTap,
   });
 
   final double scale;
@@ -1611,15 +1764,17 @@ class _EsmaActionPill extends StatelessWidget {
   final Color backgroundColor;
   final Color foregroundColor;
   final Color borderColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final radius = BorderRadius.circular(20 * scale);
+    final content = Container(
       height: 34 * scale,
       padding: EdgeInsets.symmetric(horizontal: 11 * scale),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(20 * scale),
+        borderRadius: radius,
         border: Border.all(color: borderColor),
       ),
       child: Row(
@@ -1638,6 +1793,14 @@ class _EsmaActionPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    if (onTap == null) return content;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(borderRadius: radius, onTap: onTap, child: content),
     );
   }
 }
@@ -1868,21 +2031,22 @@ class _SoftEsmaGlow extends StatelessWidget {
   }
 }
 
-class _NumberBadge extends StatelessWidget {
-  const _NumberBadge({
-    required this.number,
+class _EsmaIdentityBadge extends StatelessWidget {
+  const _EsmaIdentityBadge({
+    required this.item,
     required this.scale,
     this.highlighted = false,
     this.size = 33,
   });
 
-  final int number;
+  final EsmaItem item;
   final double scale;
   final bool highlighted;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    final hasNumber = item.hasDisplayNumber;
     return Container(
       width: size * scale,
       height: size * scale,
@@ -1894,14 +2058,20 @@ class _NumberBadge extends StatelessWidget {
             : null,
       ),
       alignment: Alignment.center,
-      child: Text(
-        '$number',
-        style: TextStyle(
-          color: highlighted ? const Color(0xFFF4E8B8) : _primaryGreen,
-          fontSize: (highlighted ? 14.2 : 12.7) * scale,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
+      child: hasNumber
+          ? Text(
+              '${item.number}',
+              style: TextStyle(
+                color: highlighted ? const Color(0xFFF4E8B8) : _primaryGreen,
+                fontSize: (highlighted ? 14.2 : 12.7) * scale,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          : Icon(
+              Icons.auto_awesome_rounded,
+              color: highlighted ? const Color(0xFFF4E8B8) : _primaryGreen,
+              size: (highlighted ? 18 : 15) * scale,
+            ),
     );
   }
 }

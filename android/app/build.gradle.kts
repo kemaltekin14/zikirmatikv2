@@ -5,6 +5,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+if (gradle.startParameter.taskNames.any { it.contains("GooglePlay", ignoreCase = true) }) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "pro.kt.zikirmatikv2"
     compileSdk = flutter.compileSdkVersion

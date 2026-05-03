@@ -16,6 +16,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var feedbackSoundPool: SoundPool? = null
     private var successSoundId: Int = 0
+    private var counterTickSoundId: Int = 0
     private var beadCollisionSoundId: Int = 0
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -41,6 +42,10 @@ class MainActivity : FlutterActivity() {
                     playSuccessSound()
                     result.success(null)
                 }
+                "playCounterTickSound" -> {
+                    playCounterTickSound()
+                    result.success(null)
+                }
                 "playBeadCollisionSound" -> {
                     playBeadCollisionSound()
                     result.success(null)
@@ -54,6 +59,7 @@ class MainActivity : FlutterActivity() {
         feedbackSoundPool?.release()
         feedbackSoundPool = null
         successSoundId = 0
+        counterTickSoundId = 0
         beadCollisionSoundId = 0
         super.cleanUpFlutterEngine(flutterEngine)
     }
@@ -71,11 +77,12 @@ class MainActivity : FlutterActivity() {
         if (feedbackSoundPool != null) return
 
         feedbackSoundPool = SoundPool.Builder()
-            .setMaxStreams(3)
+            .setMaxStreams(4)
             .setAudioAttributes(feedbackAudioAttributes())
             .build()
             .also { pool ->
                 successSoundId = pool.load(this, R.raw.success_chime, 1)
+                counterTickSoundId = pool.load(this, R.raw.counter_tick, 1)
                 beadCollisionSoundId = pool.load(this, R.raw.glass_tesbih_click, 1)
             }
     }
@@ -86,10 +93,16 @@ class MainActivity : FlutterActivity() {
         pool.play(successSoundId, 0.58f, 0.58f, 1, 0, 1.0f)
     }
 
+    private fun playCounterTickSound() {
+        val pool = feedbackSoundPool ?: return
+        if (counterTickSoundId == 0) return
+        pool.play(counterTickSoundId, 0.42f, 0.42f, 1, 0, 1.0f)
+    }
+
     private fun playBeadCollisionSound() {
         val pool = feedbackSoundPool ?: return
         if (beadCollisionSoundId == 0) return
-        pool.play(beadCollisionSoundId, 0.46f, 0.46f, 1, 0, 1.08f)
+        pool.play(beadCollisionSoundId, 0.46f, 0.46f, 1, 0, 1.0f)
     }
 
     private fun vibrate(durationMs: Long, amplitude: Int) {

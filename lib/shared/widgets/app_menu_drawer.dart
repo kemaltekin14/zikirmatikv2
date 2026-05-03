@@ -7,8 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router/app_router.dart';
-import '../../core/services/interaction_feedback_service.dart';
 import '../../features/counter/application/counter_controller.dart';
+import '../../features/dhikr_library/application/dhikr_providers.dart';
+import '../../features/dhikr_library/data/builtin_dhikrs.dart';
+import '../../features/esma/data/esma_data.dart';
+import '../../features/reminders/application/reminder_providers.dart';
 import '../layout/proportional_layout.dart';
 
 const _menuSurface = Color(0xFFFAF7EE);
@@ -22,8 +25,8 @@ const _menuDivider = Color(0xFFDDE4D9);
 const _wordmarkSuffixGreen = Color(0xFF828C6F);
 const _logoAsset = 'assets/images/menu_logo.png';
 const _bottomMotifAsset = 'assets/images/menu_bottom_motif.webp';
-// Start the route change while the drawer is still finishing its close motion.
-const _cupertinoDrawerRouteStartDelay = Duration(milliseconds: 72);
+// Let Cupertino drawer dismissal finish before the page transition starts.
+const _cupertinoDrawerRouteStartDelay = Duration(milliseconds: 210);
 
 void openAppMenu(BuildContext context) {
   Scaffold.maybeOf(context)?.openDrawer();
@@ -41,6 +44,18 @@ class AppMenuDrawer extends ConsumerWidget {
     final radius = 38 * scale;
     final currentPath = GoRouterState.of(context).uri.path;
     final counterState = ref.watch(counterControllerProvider);
+    final hasActiveDhikr =
+        counterState.count > 0 || ref.watch(lastStartedDhikrIdProvider) != null;
+    final esmaCount = esmaItems.where((item) => item.hasDisplayNumber).length;
+    final dhikrCount = ref
+        .watch(dhikrItemsProvider)
+        .maybeWhen(
+          data: (items) => items.length,
+          orElse: () => builtinDhikrs.length + esmaCount,
+        );
+    final reminderCount = ref
+        .watch(remindersProvider)
+        .maybeWhen(data: (reminders) => reminders.length, orElse: () => 0);
     final bottomMotifHeight = 168 * scale;
     final motifBlendHeight = 82 * scale;
     final motifBlendLift = 10 * scale;
@@ -171,11 +186,16 @@ class AppMenuDrawer extends ConsumerWidget {
                       _JourneyCard(
                         scale: scale,
                         state: counterState,
+                        hasActiveDhikr: hasActiveDhikr,
                         onTap: () {
-                          ref
-                              .read(interactionFeedbackServiceProvider)
-                              .primaryAction();
-                          unawaited(_navigateTo(context, AppRoutes.counter));
+                          unawaited(
+                            _navigateTo(
+                              context,
+                              hasActiveDhikr
+                                  ? AppRoutes.counter
+                                  : AppRoutes.dhikrLibrary,
+                            ),
+                          );
                         },
                       ),
                       SizedBox(height: 10 * scale),
@@ -192,10 +212,13 @@ class AppMenuDrawer extends ConsumerWidget {
                               scale: scale,
                               item: item,
                               active: currentPath == item.route,
+                              badgeLabel: _menuBadgeLabelFor(
+                                item.route,
+                                dhikrCount: dhikrCount,
+                                esmaCount: esmaCount,
+                                reminderCount: reminderCount,
+                              ),
                               onTap: () {
-                                ref
-                                    .read(interactionFeedbackServiceProvider)
-                                    .selection();
                                 unawaited(_navigateTo(context, item.route));
                               },
                             );
@@ -294,25 +317,34 @@ class _JourneyCard extends StatelessWidget {
   const _JourneyCard({
     required this.scale,
     required this.state,
+    required this.hasActiveDhikr,
     required this.onTap,
   });
 
   final double scale;
   final CounterState state;
+  final bool hasActiveDhikr;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final progress = state.isInfinite ? 0.0 : state.progress;
-    final progressLabel = state.isInfinite
+    final progressLabel = !hasActiveDhikr
+        ? 'Seç'
+        : state.isInfinite
         ? 'Sınırsız'
         : '%${(progress * 100).round()}';
+    final title = hasActiveDhikr ? 'Aktif zikir' : 'Aktif zikir yok';
+    final subtitle = hasActiveDhikr
+        ? state.activeDhikr.name
+        : 'Bir zikir seçince burada görünür';
+    final progressValue = hasActiveDhikr ? progress : 0.0;
 
     final borderRadius = BorderRadius.circular(22 * scale);
 
     return Semantics(
       button: true,
-      label: 'Aktif zikir, ${state.activeDhikr.name}',
+      label: hasActiveDhikr ? 'Aktif zikir, ${state.activeDhikr.name}' : title,
       child: ClipRRect(
         borderRadius: borderRadius,
         child: BackdropFilter(
@@ -337,6 +369,7 @@ class _JourneyCard extends StatelessWidget {
               ),
               child: InkWell(
                 key: const Key('menu.activeDhikrCard'),
+                enableFeedback: false,
                 onTap: onTap,
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -370,7 +403,7 @@ class _JourneyCard extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Aktif zikir',
+                                    title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -397,7 +430,7 @@ class _JourneyCard extends StatelessWidget {
                             SizedBox(height: 4 * scale),
                             Text(
                               key: const Key('menu.activeDhikrName'),
-                              state.activeDhikr.name,
+                              subtitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -411,7 +444,7 @@ class _JourneyCard extends StatelessWidget {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(999),
                               child: LinearProgressIndicator(
-                                value: progress,
+                                value: progressValue,
                                 minHeight: 5 * scale,
                                 backgroundColor: _menuDivider,
                                 valueColor: const AlwaysStoppedAnimation<Color>(
@@ -439,22 +472,26 @@ class _MenuDestinationTile extends StatelessWidget {
     required this.scale,
     required this.item,
     required this.active,
+    required this.badgeLabel,
     required this.onTap,
   });
 
   final double scale;
   final _MenuItemData item;
   final bool active;
+  final String? badgeLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18 * scale);
+    final badgeLabel = this.badgeLabel;
 
     return Material(
       color: Colors.transparent,
       borderRadius: radius,
       child: InkWell(
+        enableFeedback: false,
         onTap: onTap,
         borderRadius: radius,
         child: AnimatedContainer(
@@ -504,8 +541,60 @@ class _MenuDestinationTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (badgeLabel != null) ...[
+                SizedBox(width: 8 * scale),
+                _MenuCountPill(scale: scale, label: badgeLabel, active: active),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuCountPill extends StatelessWidget {
+  const _MenuCountPill({
+    required this.scale,
+    required this.label,
+    required this.active,
+  });
+
+  final double scale;
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      constraints: BoxConstraints(minWidth: 28 * scale, minHeight: 20 * scale),
+      padding: EdgeInsets.symmetric(horizontal: 7 * scale, vertical: 3 * scale),
+      decoration: BoxDecoration(
+        color: active
+            ? Colors.white.withValues(alpha: 0.88)
+            : _menuGreenSoft.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active
+              ? Colors.white.withValues(alpha: 0.92)
+              : _menuGreenSoft.withValues(alpha: 0.18),
+          width: 0.8 * scale,
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        textScaler: TextScaler.noScaling,
+        style: TextStyle(
+          color: active ? _menuGreen : _menuGreenSoft,
+          fontSize: 10.6 * scale,
+          fontWeight: FontWeight.w900,
+          height: 1.0,
+          letterSpacing: 0,
         ),
       ),
     );
@@ -552,6 +641,20 @@ Duration _drawerNavigationDelayFor(BuildContext context) {
   };
 }
 
+String? _menuBadgeLabelFor(
+  String route, {
+  required int dhikrCount,
+  required int esmaCount,
+  required int reminderCount,
+}) {
+  return switch (route) {
+    AppRoutes.dhikrLibrary => dhikrCount.toString(),
+    AppRoutes.esma => esmaCount.toString(),
+    AppRoutes.reminders => reminderCount.toString(),
+    _ => null,
+  };
+}
+
 class _MenuItemData {
   const _MenuItemData({
     required this.label,
@@ -584,11 +687,6 @@ const _menuItems = [
     label: 'Namaz Tesbihatı',
     icon: Icons.mosque_rounded,
     route: AppRoutes.namazTesbihati,
-  ),
-  _MenuItemData(
-    label: 'Virdler',
-    icon: Icons.repeat_rounded,
-    route: AppRoutes.vird,
   ),
   _MenuItemData(
     label: 'Hatırlatıcılar',

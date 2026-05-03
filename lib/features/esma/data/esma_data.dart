@@ -2,7 +2,7 @@ import '../domain/esma_item.dart';
 
 const esmaItems = [
   EsmaItem(
-    number: 1,
+    number: 0,
     name: "Allah",
     arabicText: "الله",
     dhikrName: "Ya Allah",
@@ -14,7 +14,7 @@ const esmaItems = [
     ebcedNumber: 66,
   ),
   EsmaItem(
-    number: 2,
+    number: 1,
     name: "Er-Rahmân",
     arabicText: "الرحمن",
     dhikrName: "Ya Rahmân",
@@ -26,7 +26,7 @@ const esmaItems = [
     ebcedNumber: 298,
   ),
   EsmaItem(
-    number: 3,
+    number: 2,
     name: "Er-Rahîm",
     arabicText: "الرحيم",
     dhikrName: "Ya Rahîm",
@@ -38,7 +38,7 @@ const esmaItems = [
     ebcedNumber: 258,
   ),
   EsmaItem(
-    number: 4,
+    number: 3,
     name: "El-Melik",
     arabicText: "الملك",
     dhikrName: "Ya Melik",
@@ -50,7 +50,7 @@ const esmaItems = [
     ebcedNumber: 90,
   ),
   EsmaItem(
-    number: 5,
+    number: 4,
     name: "El-Kuddûs",
     arabicText: "القدوس",
     dhikrName: "Ya Kuddûs",
@@ -62,7 +62,7 @@ const esmaItems = [
     ebcedNumber: 170,
   ),
   EsmaItem(
-    number: 6,
+    number: 5,
     name: "Es-Selâm",
     arabicText: "السلام",
     dhikrName: "Ya Selâm",
@@ -74,7 +74,7 @@ const esmaItems = [
     ebcedNumber: 131,
   ),
   EsmaItem(
-    number: 7,
+    number: 6,
     name: "El-Mü'min",
     arabicText: "المؤمن",
     dhikrName: "Ya Mü'min",
@@ -86,7 +86,7 @@ const esmaItems = [
     ebcedNumber: 136,
   ),
   EsmaItem(
-    number: 8,
+    number: 7,
     name: "El-Müheymin",
     arabicText: "المهيمن",
     dhikrName: "Ya Müheymin",
@@ -98,7 +98,7 @@ const esmaItems = [
     ebcedNumber: 145,
   ),
   EsmaItem(
-    number: 9,
+    number: 8,
     name: "El-Azîz",
     arabicText: "العزيز",
     dhikrName: "Ya Azîz",
@@ -110,7 +110,7 @@ const esmaItems = [
     ebcedNumber: 94,
   ),
   EsmaItem(
-    number: 10,
+    number: 9,
     name: "El-Cebbâr",
     arabicText: "الجبار",
     dhikrName: "Ya Cebbâr",
@@ -122,7 +122,7 @@ const esmaItems = [
     ebcedNumber: 206,
   ),
   EsmaItem(
-    number: 11,
+    number: 10,
     name: "El-Mütekebbir",
     arabicText: "المتكبر",
     dhikrName: "Ya Mütekebbir",
@@ -134,7 +134,7 @@ const esmaItems = [
     ebcedNumber: 662,
   ),
   EsmaItem(
-    number: 12,
+    number: 11,
     name: "El-Hâlık",
     arabicText: "الخالق",
     dhikrName: "Ya Hâlik",
@@ -146,7 +146,7 @@ const esmaItems = [
     ebcedNumber: 731,
   ),
   EsmaItem(
-    number: 13,
+    number: 12,
     name: "El-Bâri'",
     arabicText: "البارئ",
     dhikrName: "Ya Bâri'",
@@ -158,7 +158,7 @@ const esmaItems = [
     ebcedNumber: 213,
   ),
   EsmaItem(
-    number: 14,
+    number: 13,
     name: "El-Musavvir",
     arabicText: "المصور",
     dhikrName: "Ya Musavvir",
@@ -170,7 +170,7 @@ const esmaItems = [
     ebcedNumber: 336,
   ),
   EsmaItem(
-    number: 15,
+    number: 14,
     name: "El-Gaffâr",
     arabicText: "الغفار",
     dhikrName: "Ya Gaffâr",
@@ -182,7 +182,7 @@ const esmaItems = [
     ebcedNumber: 1281,
   ),
   EsmaItem(
-    number: 16,
+    number: 15,
     name: "El-Kahhâr",
     arabicText: "القهار",
     dhikrName: "Ya Kahhâr",
@@ -194,7 +194,7 @@ const esmaItems = [
     ebcedNumber: 306,
   ),
   EsmaItem(
-    number: 17,
+    number: 16,
     name: "El-Vehhâb",
     arabicText: "الوهاب",
     dhikrName: "Ya Vehhâb",
@@ -206,7 +206,7 @@ const esmaItems = [
     ebcedNumber: 14,
   ),
   EsmaItem(
-    number: 18,
+    number: 17,
     name: "Er-Rezzâk",
     arabicText: "الرزاق",
     dhikrName: "Ya Rezzâk",
@@ -218,7 +218,7 @@ const esmaItems = [
     ebcedNumber: 308,
   ),
   EsmaItem(
-    number: 19,
+    number: 18,
     name: "El-Fettâh",
     arabicText: "الفتاح",
     dhikrName: "Ya Fettâh",
@@ -230,7 +230,7 @@ const esmaItems = [
     ebcedNumber: 489,
   ),
   EsmaItem(
-    number: 20,
+    number: 19,
     name: "El-Alîm",
     arabicText: "العليم",
     dhikrName: "Ya Alîm",
@@ -242,7 +242,7 @@ const esmaItems = [
     ebcedNumber: 150,
   ),
   EsmaItem(
-    number: 21,
+    number: 20,
     name: "El-Kâbıd",
     arabicText: "القابض",
     dhikrName: "Ya Kâbız",
@@ -254,7 +254,7 @@ const esmaItems = [
     ebcedNumber: 903,
   ),
   EsmaItem(
-    number: 22,
+    number: 21,
     name: "El-Bâsıt",
     arabicText: "الباسط",
     dhikrName: "Ya Bâsıt",
@@ -266,7 +266,7 @@ const esmaItems = [
     ebcedNumber: 72,
   ),
   EsmaItem(
-    number: 23,
+    number: 22,
     name: "El-Hâfıd",
     arabicText: "الخافض",
     dhikrName: "Ya Hâfıd",
@@ -278,7 +278,7 @@ const esmaItems = [
     ebcedNumber: 1481,
   ),
   EsmaItem(
-    number: 24,
+    number: 23,
     name: "Er-Râfi'",
     arabicText: "الرافع",
     dhikrName: "Ya Râfi'",
@@ -290,7 +290,7 @@ const esmaItems = [
     ebcedNumber: 351,
   ),
   EsmaItem(
-    number: 25,
+    number: 24,
     name: "El-Muizz",
     arabicText: "المعز",
     dhikrName: "Ya Muizz",
@@ -302,7 +302,7 @@ const esmaItems = [
     ebcedNumber: 117,
   ),
   EsmaItem(
-    number: 26,
+    number: 25,
     name: "El-Müzill",
     arabicText: "المذل",
     dhikrName: "Ya Müzill",
@@ -314,7 +314,7 @@ const esmaItems = [
     ebcedNumber: 770,
   ),
   EsmaItem(
-    number: 27,
+    number: 26,
     name: "Es-Semî'",
     arabicText: "السميع",
     dhikrName: "Ya Semî'",
@@ -326,7 +326,7 @@ const esmaItems = [
     ebcedNumber: 180,
   ),
   EsmaItem(
-    number: 28,
+    number: 27,
     name: "El-Basîr",
     arabicText: "البصير",
     dhikrName: "Ya Basîr",
@@ -338,7 +338,7 @@ const esmaItems = [
     ebcedNumber: 302,
   ),
   EsmaItem(
-    number: 29,
+    number: 28,
     name: "El-Hakem",
     arabicText: "الحكم",
     dhikrName: "Ya Hakem",
@@ -350,7 +350,7 @@ const esmaItems = [
     ebcedNumber: 68,
   ),
   EsmaItem(
-    number: 30,
+    number: 29,
     name: "El-Adl",
     arabicText: "العدل",
     dhikrName: "Ya Adl",
@@ -362,7 +362,7 @@ const esmaItems = [
     ebcedNumber: 104,
   ),
   EsmaItem(
-    number: 31,
+    number: 30,
     name: "El-Latîf",
     arabicText: "اللطيف",
     dhikrName: "Ya Latîf",
@@ -374,7 +374,7 @@ const esmaItems = [
     ebcedNumber: 129,
   ),
   EsmaItem(
-    number: 32,
+    number: 31,
     name: "El-Habîr",
     arabicText: "الخبير",
     dhikrName: "Ya Habîr",
@@ -386,7 +386,7 @@ const esmaItems = [
     ebcedNumber: 812,
   ),
   EsmaItem(
-    number: 33,
+    number: 32,
     name: "El-Halîm",
     arabicText: "الحليم",
     dhikrName: "Ya Halîm",
@@ -398,7 +398,7 @@ const esmaItems = [
     ebcedNumber: 88,
   ),
   EsmaItem(
-    number: 34,
+    number: 33,
     name: "El-Azîm",
     arabicText: "العظيم",
     dhikrName: "Ya Azîm",
@@ -410,7 +410,7 @@ const esmaItems = [
     ebcedNumber: 1020,
   ),
   EsmaItem(
-    number: 35,
+    number: 34,
     name: "El-Gafûr",
     arabicText: "الغفور",
     dhikrName: "Ya Gafûr",
@@ -422,7 +422,7 @@ const esmaItems = [
     ebcedNumber: 1286,
   ),
   EsmaItem(
-    number: 36,
+    number: 35,
     name: "Eş-Şekûr",
     arabicText: "الشكور",
     dhikrName: "Ya Şekûr",
@@ -434,7 +434,7 @@ const esmaItems = [
     ebcedNumber: 526,
   ),
   EsmaItem(
-    number: 37,
+    number: 36,
     name: "El-Aliyy",
     arabicText: "العلي",
     dhikrName: "Ya Aliyy",
@@ -446,7 +446,7 @@ const esmaItems = [
     ebcedNumber: 110,
   ),
   EsmaItem(
-    number: 38,
+    number: 37,
     name: "El-Kebîr",
     arabicText: "الكبير",
     dhikrName: "Ya Kebîr",
@@ -458,7 +458,7 @@ const esmaItems = [
     ebcedNumber: 232,
   ),
   EsmaItem(
-    number: 39,
+    number: 38,
     name: "El-Hafîz",
     arabicText: "الحفيظ",
     dhikrName: "Ya Hafîz",
@@ -470,7 +470,7 @@ const esmaItems = [
     ebcedNumber: 998,
   ),
   EsmaItem(
-    number: 40,
+    number: 39,
     name: "El-Mukît",
     arabicText: "المقيت",
     dhikrName: "Ya Mukît",
@@ -482,7 +482,7 @@ const esmaItems = [
     ebcedNumber: 550,
   ),
   EsmaItem(
-    number: 41,
+    number: 40,
     name: "El-Hasîb",
     arabicText: "الحسيب",
     dhikrName: "Ya Hasîb",
@@ -494,7 +494,7 @@ const esmaItems = [
     ebcedNumber: 80,
   ),
   EsmaItem(
-    number: 42,
+    number: 41,
     name: "El-Celîl",
     arabicText: "الجليل",
     dhikrName: "Ya Celîl",
@@ -506,7 +506,7 @@ const esmaItems = [
     ebcedNumber: 73,
   ),
   EsmaItem(
-    number: 43,
+    number: 42,
     name: "El-Kerîm",
     arabicText: "الكريم",
     dhikrName: "Ya Kerîm",
@@ -518,7 +518,7 @@ const esmaItems = [
     ebcedNumber: 270,
   ),
   EsmaItem(
-    number: 44,
+    number: 43,
     name: "Er-Rakîb",
     arabicText: "الرقيب",
     dhikrName: "Ya Rakîb",
@@ -530,7 +530,7 @@ const esmaItems = [
     ebcedNumber: 312,
   ),
   EsmaItem(
-    number: 45,
+    number: 44,
     name: "El-Mucîb",
     arabicText: "المجيب",
     dhikrName: "Ya Mücîb",
@@ -542,7 +542,7 @@ const esmaItems = [
     ebcedNumber: 55,
   ),
   EsmaItem(
-    number: 46,
+    number: 45,
     name: "El-Vâsi'",
     arabicText: "الواسع",
     dhikrName: "Ya Vâsi'",
@@ -554,7 +554,7 @@ const esmaItems = [
     ebcedNumber: 137,
   ),
   EsmaItem(
-    number: 47,
+    number: 46,
     name: "El-Hakîm",
     arabicText: "الحكيم",
     dhikrName: "Ya Hakîm",
@@ -566,7 +566,7 @@ const esmaItems = [
     ebcedNumber: 78,
   ),
   EsmaItem(
-    number: 48,
+    number: 47,
     name: "El-Vedûd",
     arabicText: "الودود",
     dhikrName: "Ya Vedûd",
@@ -578,7 +578,7 @@ const esmaItems = [
     ebcedNumber: 20,
   ),
   EsmaItem(
-    number: 49,
+    number: 48,
     name: "El-Mecîd",
     arabicText: "المجيد",
     dhikrName: "Ya Mecîd",
@@ -590,7 +590,7 @@ const esmaItems = [
     ebcedNumber: 57,
   ),
   EsmaItem(
-    number: 50,
+    number: 49,
     name: "El-Bâis",
     arabicText: "الباعث",
     dhikrName: "Ya Bâis",
@@ -602,7 +602,7 @@ const esmaItems = [
     ebcedNumber: 573,
   ),
   EsmaItem(
-    number: 51,
+    number: 50,
     name: "Eş-Şehîd",
     arabicText: "الشهيد",
     dhikrName: "Ya Şehîd",
@@ -614,7 +614,7 @@ const esmaItems = [
     ebcedNumber: 319,
   ),
   EsmaItem(
-    number: 52,
+    number: 51,
     name: "El-Hakk",
     arabicText: "الحق",
     dhikrName: "Ya Hakk",
@@ -626,7 +626,7 @@ const esmaItems = [
     ebcedNumber: 108,
   ),
   EsmaItem(
-    number: 53,
+    number: 52,
     name: "El-Vekîl",
     arabicText: "الوكيل",
     dhikrName: "Ya Vekîl",
@@ -638,7 +638,7 @@ const esmaItems = [
     ebcedNumber: 66,
   ),
   EsmaItem(
-    number: 54,
+    number: 53,
     name: "El-Kaviyy",
     arabicText: "القوي",
     dhikrName: "Ya Kavî",
@@ -650,7 +650,7 @@ const esmaItems = [
     ebcedNumber: 116,
   ),
   EsmaItem(
-    number: 55,
+    number: 54,
     name: "El-Metîn",
     arabicText: "المتين",
     dhikrName: "Ya Metîn",
@@ -662,7 +662,7 @@ const esmaItems = [
     ebcedNumber: 500,
   ),
   EsmaItem(
-    number: 56,
+    number: 55,
     name: "El-Veliyy",
     arabicText: "الولي",
     dhikrName: "Ya Velî",
@@ -674,7 +674,7 @@ const esmaItems = [
     ebcedNumber: 46,
   ),
   EsmaItem(
-    number: 57,
+    number: 56,
     name: "El-Hamîd",
     arabicText: "الحميد",
     dhikrName: "Ya Hamîd",
@@ -686,7 +686,7 @@ const esmaItems = [
     ebcedNumber: 62,
   ),
   EsmaItem(
-    number: 58,
+    number: 57,
     name: "El-Muhsî",
     arabicText: "المحصي",
     dhikrName: "Ya Muhsî",
@@ -698,7 +698,7 @@ const esmaItems = [
     ebcedNumber: 148,
   ),
   EsmaItem(
-    number: 59,
+    number: 58,
     name: "El-Mübdi'",
     arabicText: "المبدئ",
     dhikrName: "Ya Mübdi'",
@@ -710,7 +710,7 @@ const esmaItems = [
     ebcedNumber: 57,
   ),
   EsmaItem(
-    number: 60,
+    number: 59,
     name: "El-Muîd",
     arabicText: "المعيد",
     dhikrName: "Ya Muîd",
@@ -722,7 +722,7 @@ const esmaItems = [
     ebcedNumber: 124,
   ),
   EsmaItem(
-    number: 61,
+    number: 60,
     name: "El-Muhyî",
     arabicText: "المحيي",
     dhikrName: "Ya Muhyî",
@@ -734,7 +734,7 @@ const esmaItems = [
     ebcedNumber: 68,
   ),
   EsmaItem(
-    number: 62,
+    number: 61,
     name: "El-Mümît",
     arabicText: "المميت",
     dhikrName: "Ya Mümît",
@@ -746,7 +746,7 @@ const esmaItems = [
     ebcedNumber: 490,
   ),
   EsmaItem(
-    number: 63,
+    number: 62,
     name: "El-Hayy",
     arabicText: "الحي",
     dhikrName: "Ya Hayy",
@@ -758,7 +758,7 @@ const esmaItems = [
     ebcedNumber: 18,
   ),
   EsmaItem(
-    number: 64,
+    number: 63,
     name: "El-Kayyûm",
     arabicText: "القيوم",
     dhikrName: "Ya Kayyûm",
@@ -770,7 +770,7 @@ const esmaItems = [
     ebcedNumber: 156,
   ),
   EsmaItem(
-    number: 65,
+    number: 64,
     name: "El-Vâcid",
     arabicText: "الواجد",
     dhikrName: "Ya Vâcid",
@@ -782,7 +782,7 @@ const esmaItems = [
     ebcedNumber: 14,
   ),
   EsmaItem(
-    number: 66,
+    number: 65,
     name: "El-Mâcid",
     arabicText: "الماجد",
     dhikrName: "Ya Mâcid",
@@ -794,7 +794,7 @@ const esmaItems = [
     ebcedNumber: 48,
   ),
   EsmaItem(
-    number: 67,
+    number: 66,
     name: "El-Vâhid",
     arabicText: "الواحد",
     dhikrName: "Ya Vâhid",
@@ -804,6 +804,18 @@ const esmaItems = [
     explanation:
         "Zatında, sıfatlarında ve fiillerinde tek ve bir olan, ortağı ve benzeri bulunmayandır. O bir tektir, eşi ve dengi yoktur.",
     ebcedNumber: 19,
+  ),
+  EsmaItem(
+    number: 67,
+    name: "El-Ehad",
+    arabicText: "الأحد",
+    dhikrName: "Ya Ehad",
+    dhikrArabicText: "يَا أَحَدُ",
+    meaning: "Bir ve tek olan; eşi, benzeri ve ortağı bulunmayan.",
+    category: "Kudret",
+    explanation:
+        "Zatında, sıfatlarında ve fiillerinde tek olan, eşi, benzeri ve ortağı bulunmayan yüce Allah'tır. O'nun birliği mutlak ve benzersizdir.",
+    ebcedNumber: 13,
   ),
   EsmaItem(
     number: 68,

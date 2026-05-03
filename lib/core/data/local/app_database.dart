@@ -5,7 +5,11 @@ import 'package:uuid/uuid.dart';
 part 'app_database.g.dart';
 
 const _uuid = Uuid();
-DateTime? _lastCounterEventCreatedAt;
+
+const _counterSessionStatusActive = 'active';
+const _counterSessionStatusCompleted = 'completed';
+const _counterSessionStatusReset = 'reset';
+const _defaultReminderRepeatDays = '1,2,3,4,5,6,7';
 
 class DhikrRecords extends Table {
   TextColumn get id => text()();
@@ -27,15 +31,38 @@ class DhikrRecords extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-class CounterEvents extends Table {
+class CounterStatBuckets extends Table {
   TextColumn get id => text()();
   TextColumn get dhikrId => text()();
   TextColumn get dhikrName => text()();
-  IntColumn get delta => integer()();
-  IntColumn get countAfter => integer()();
+  DateTimeColumn get bucketStart => dateTime()();
+  IntColumn get year => integer()();
+  IntColumn get month => integer()();
+  IntColumn get day => integer()();
+  IntColumn get hour => integer()();
+  IntColumn get count => integer()();
   IntColumn get target => integer()();
-  TextColumn get eventType => text()();
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  TextColumn get syncStatus =>
+      text().withDefault(const Constant('pendingUpload'))();
+  TextColumn get userId => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class CounterSessions extends Table {
+  TextColumn get id => text()();
+  TextColumn get dhikrId => text()();
+  TextColumn get dhikrName => text()();
+  IntColumn get count => integer()();
+  IntColumn get target => integer()();
+  TextColumn get status =>
+      text().withDefault(const Constant(_counterSessionStatusActive))();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get completedAt => dateTime().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get deletedAt => dateTime().nullable()();
   TextColumn get syncStatus =>
@@ -52,6 +79,9 @@ class ReminderRecords extends Table {
   TextColumn get body => text()();
   IntColumn get hour => integer()();
   IntColumn get minute => integer()();
+  TextColumn get repeatDays =>
+      text().withDefault(const Constant(_defaultReminderRepeatDays))();
+  TextColumn get targetDhikrId => text().nullable()();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -82,14 +112,38 @@ class VirdProgressRecords extends Table {
 }
 
 @DriftDatabase(
-  tables: [DhikrRecords, CounterEvents, ReminderRecords, VirdProgressRecords],
+  tables: [
+    DhikrRecords,
+    CounterStatBuckets,
+    CounterSessions,
+    ReminderRecords,
+    VirdProgressRecords,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(executor ?? driftDatabase(name: 'zikirmatik_v2'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 4;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await customStatement('DROP TABLE IF EXISTS counter_events');
+        await m.createTable(counterStatBuckets);
+        await m.createTable(counterSessions);
+      }
+      if (from < 3) {
+        await m.addColumn(reminderRecords, reminderRecords.repeatDays);
+      }
+      if (from < 4) {
+        await m.addColumn(reminderRecords, reminderRecords.targetDhikrId);
+      }
+    },
+  );
 
   Stream<List<DhikrRecord>> watchCustomDhikrs() {
     return (select(dhikrRecords)
@@ -138,37 +192,98 @@ class AppDatabase extends _$AppDatabase {
         );
   }
 
-  Future<void> logCounterEvent({
+  Future<void> recordCounterProgress({
+    required String sessionId,
     required String dhikrId,
     required String dhikrName,
     required int delta,
     required int countAfter,
     required int target,
-    required String eventType,
-  }) {
-    final now = _nextCounterEventTimestamp();
-    return into(counterEvents).insert(
-      CounterEventsCompanion.insert(
-        id: _uuid.v4(),
+    required bool completed,
+  }) async {
+    final now = DateTime.now();
+    await transaction(() async {
+      if (delta != 0) {
+        await _applyCounterStatDelta(
+          dhikrId: dhikrId,
+          dhikrName: dhikrName,
+          delta: delta,
+          target: target,
+          now: now,
+        );
+      }
+
+      await _upsertCounterSession(
+        id: sessionId,
         dhikrId: dhikrId,
         dhikrName: dhikrName,
-        delta: delta,
-        countAfter: countAfter,
+        count: countAfter,
         target: target,
-        eventType: eventType,
-        createdAt: now,
-        updatedAt: now,
+        status: completed
+            ? _counterSessionStatusCompleted
+            : _counterSessionStatusActive,
+        completedAt: completed ? now : null,
+        now: now,
+      );
+    });
+  }
+
+  Future<void> updateCounterSessionTarget({
+    required String sessionId,
+    required String dhikrId,
+    required String dhikrName,
+    required int count,
+    required int target,
+    required bool completed,
+  }) async {
+    if (count <= 0) return;
+    final now = DateTime.now();
+    await _upsertCounterSession(
+      id: sessionId,
+      dhikrId: dhikrId,
+      dhikrName: dhikrName,
+      count: count,
+      target: target,
+      status: completed
+          ? _counterSessionStatusCompleted
+          : _counterSessionStatusActive,
+      completedAt: completed ? now : null,
+      now: now,
+    );
+  }
+
+  Future<void> markCounterSessionReset(String sessionId) {
+    return (update(
+      counterSessions,
+    )..where((table) => table.id.equals(sessionId))).write(
+      CounterSessionsCompanion(
+        count: const Value(0),
+        status: const Value(_counterSessionStatusReset),
+        completedAt: const Value(null),
+        updatedAt: Value(DateTime.now()),
+        syncStatus: const Value('pendingUpload'),
       ),
     );
   }
 
-  Stream<List<CounterEvent>> watchCounterEvents() {
-    return (select(counterEvents)
+  Stream<List<CounterStatBucket>> watchCounterStatBuckets() {
+    return (select(counterStatBuckets)
           ..where((table) => table.deletedAt.isNull())
           ..orderBy([
-            (table) => OrderingTerm.desc(table.createdAt),
-            (table) => OrderingTerm.desc(table.countAfter),
+            (table) => OrderingTerm.desc(table.bucketStart),
+            (table) => OrderingTerm.desc(table.count),
           ]))
+        .watch();
+  }
+
+  Stream<List<CounterSession>> watchCounterSessions() {
+    return (select(counterSessions)
+          ..where(
+            (table) =>
+                table.deletedAt.isNull() &
+                table.status.isNotValue(_counterSessionStatusReset),
+          )
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]))
         .watch();
   }
 
@@ -187,6 +302,8 @@ class AppDatabase extends _$AppDatabase {
     required String body,
     required int hour,
     required int minute,
+    String repeatDays = _defaultReminderRepeatDays,
+    String? targetDhikrId,
   }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
@@ -197,6 +314,8 @@ class AppDatabase extends _$AppDatabase {
         body: body,
         hour: hour,
         minute: minute,
+        repeatDays: Value(repeatDays),
+        targetDhikrId: Value(targetDhikrId),
         createdAt: now,
         updatedAt: now,
       ),
@@ -204,6 +323,58 @@ class AppDatabase extends _$AppDatabase {
     return (select(
       reminderRecords,
     )..where((table) => table.id.equals(id))).getSingle();
+  }
+
+  Future<ReminderRecord?> findReminderByTitle(String title) async {
+    final reminders =
+        await (select(reminderRecords)
+              ..where(
+                (table) => table.deletedAt.isNull() & table.title.equals(title),
+              )
+              ..orderBy([(table) => OrderingTerm.asc(table.createdAt)])
+              ..limit(1))
+            .get();
+    return reminders.isEmpty ? null : reminders.first;
+  }
+
+  Future<ReminderRecord> upsertReminderByTitle({
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    String repeatDays = _defaultReminderRepeatDays,
+    String? targetDhikrId,
+  }) async {
+    final existingReminder = await findReminderByTitle(title);
+    if (existingReminder == null) {
+      return addReminder(
+        title: title,
+        body: body,
+        hour: hour,
+        minute: minute,
+        repeatDays: repeatDays,
+        targetDhikrId: targetDhikrId,
+      );
+    }
+
+    await (update(
+      reminderRecords,
+    )..where((table) => table.id.equals(existingReminder.id))).write(
+      ReminderRecordsCompanion(
+        body: Value(body),
+        hour: Value(hour),
+        minute: Value(minute),
+        repeatDays: Value(repeatDays),
+        targetDhikrId: Value(targetDhikrId),
+        enabled: const Value(true),
+        updatedAt: Value(DateTime.now()),
+        syncStatus: const Value('pendingUpload'),
+      ),
+    );
+
+    return (select(
+      reminderRecords,
+    )..where((table) => table.id.equals(existingReminder.id))).getSingle();
   }
 
   Future<void> setReminderEnabled(String id, bool enabled) {
@@ -250,14 +421,115 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  Future<void> _applyCounterStatDelta({
+    required String dhikrId,
+    required String dhikrName,
+    required int delta,
+    required int target,
+    required DateTime now,
+  }) async {
+    final bucketStart = DateTime(now.year, now.month, now.day, now.hour);
+    final id = _counterStatBucketId(bucketStart, dhikrId);
+    final existing = await (select(
+      counterStatBuckets,
+    )..where((table) => table.id.equals(id))).getSingleOrNull();
+
+    if (existing == null) {
+      if (delta <= 0) return;
+      await into(counterStatBuckets).insert(
+        CounterStatBucketsCompanion.insert(
+          id: id,
+          dhikrId: dhikrId,
+          dhikrName: dhikrName,
+          bucketStart: bucketStart,
+          year: bucketStart.year,
+          month: bucketStart.month,
+          day: bucketStart.day,
+          hour: bucketStart.hour,
+          count: delta,
+          target: target,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      return;
+    }
+
+    final nextCount = existing.count + delta;
+    if (nextCount <= 0) {
+      await (delete(
+        counterStatBuckets,
+      )..where((table) => table.id.equals(id))).go();
+      return;
+    }
+
+    await (update(
+      counterStatBuckets,
+    )..where((table) => table.id.equals(id))).write(
+      CounterStatBucketsCompanion(
+        dhikrName: Value(dhikrName),
+        count: Value(nextCount),
+        target: Value(target),
+        updatedAt: Value(now),
+        syncStatus: const Value('pendingUpload'),
+      ),
+    );
+  }
+
+  Future<void> _upsertCounterSession({
+    required String id,
+    required String dhikrId,
+    required String dhikrName,
+    required int count,
+    required int target,
+    required String status,
+    required DateTime? completedAt,
+    required DateTime now,
+  }) async {
+    if (count <= 0) return;
+
+    final existing = await (select(
+      counterSessions,
+    )..where((table) => table.id.equals(id))).getSingleOrNull();
+
+    if (existing == null) {
+      await into(counterSessions).insert(
+        CounterSessionsCompanion.insert(
+          id: id,
+          dhikrId: dhikrId,
+          dhikrName: dhikrName,
+          count: count,
+          target: target,
+          status: Value(status),
+          startedAt: now,
+          completedAt: Value(completedAt),
+          updatedAt: now,
+        ),
+      );
+      return;
+    }
+
+    await (update(
+      counterSessions,
+    )..where((table) => table.id.equals(id))).write(
+      CounterSessionsCompanion(
+        dhikrId: Value(dhikrId),
+        dhikrName: Value(dhikrName),
+        count: Value(count),
+        target: Value(target),
+        status: Value(status),
+        completedAt: Value(completedAt),
+        updatedAt: Value(now),
+        syncStatus: const Value('pendingUpload'),
+      ),
+    );
+  }
 }
 
-DateTime _nextCounterEventTimestamp() {
-  final now = DateTime.now();
-  final previous = _lastCounterEventCreatedAt;
-  final timestamp = previous != null && !now.isAfter(previous)
-      ? previous.add(const Duration(milliseconds: 1))
-      : now;
-  _lastCounterEventCreatedAt = timestamp;
-  return timestamp;
+String _counterStatBucketId(DateTime bucketStart, String dhikrId) {
+  final month = bucketStart.month.toString().padLeft(2, '0');
+  final day = bucketStart.day.toString().padLeft(2, '0');
+  final hour = bucketStart.hour.toString().padLeft(2, '0');
+  return '${bucketStart.year}$month$day$hour-$dhikrId';
 }

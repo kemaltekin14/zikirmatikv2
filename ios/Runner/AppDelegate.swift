@@ -6,6 +6,7 @@ import AVFoundation
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var feedbackChannel: FlutterMethodChannel?
   private var successPlayer: AVAudioPlayer?
+  private var counterTickPlayer: AVAudioPlayer?
   private var beadCollisionPlayer: AVAudioPlayer?
 
   override func application(
@@ -34,6 +35,9 @@ import AVFoundation
       case "playSuccessSound":
         self?.playSuccessSound()
         result(nil)
+      case "playCounterTickSound":
+        self?.playCounterTickSound()
+        result(nil)
       case "playBeadCollisionSound":
         self?.playBeadCollisionSound()
         result(nil)
@@ -56,6 +60,7 @@ import AVFoundation
     }
 
     successPlayer = makePlayer(named: "success_chime", volume: 0.58)
+    counterTickPlayer = makePlayer(named: "counter_tick", volume: 0.42)
     beadCollisionPlayer = makePlayer(named: "glass_tesbih_click", volume: 0.48)
   }
 
@@ -76,6 +81,10 @@ import AVFoundation
 
   private func playSuccessSound() {
     play(successPlayer)
+  }
+
+  private func playCounterTickSound() {
+    play(counterTickPlayer)
   }
 
   private func playBeadCollisionSound() {

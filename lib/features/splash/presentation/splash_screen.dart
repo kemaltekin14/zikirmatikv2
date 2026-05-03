@@ -31,6 +31,9 @@ class _SplashScreenState extends State<SplashScreen>
   static const _dashboardHeroImage = AssetImage(
     'assets/images/home_mosque.webp',
   );
+  static const _verseArabic =
+      'الذين آمنوا وتطمئن قلوبهم بذكر الله\n'
+      'ألا بذكر الله تطمئن القلوب';
   static const _menuDestinationImages = <AssetImage>[
     AssetImage('assets/images/zikir-hero.webp'),
     AssetImage('assets/images/esma-her2.webp'),
@@ -129,7 +132,9 @@ class _SplashScreenState extends State<SplashScreen>
                   IgnorePointer(
                     child: Opacity(
                       opacity: transition,
-                      child: const DashboardScreen(),
+                      child: const DashboardScreen(
+                        showStartupNotificationPrompt: false,
+                      ),
                     ),
                   ),
                 IgnorePointer(
@@ -273,8 +278,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   progress: verse,
                                   dy: 18,
                                   child: Text(
-                                    'اَلَّذٖينَ اٰمَنُوا وَتَطْمَئِنُّ قُلُوبُهُمْ بِذِكْرِ اللّٰهِؕ\n'
-                                    'اَلَا بِذِكْرِ اللّٰهِ تَطْمَئِنُّ الْقُلُوبُؕ',
+                                    _verseArabic,
                                     maxLines: 2,
                                     textAlign: TextAlign.center,
                                     textDirection: TextDirection.rtl,

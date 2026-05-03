@@ -2124,6 +2124,7 @@ class _HeroMenuButton extends StatelessWidget {
           ],
         ),
         child: IconButton(
+          enableFeedback: false,
           tooltip: 'Menü',
           onPressed: () => openAppMenu(context),
           icon: Icon(

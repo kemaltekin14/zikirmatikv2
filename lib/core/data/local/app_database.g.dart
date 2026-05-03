@@ -764,12 +764,12 @@ class DhikrRecordsCompanion extends UpdateCompanion<DhikrRecord> {
   }
 }
 
-class $CounterEventsTable extends CounterEvents
-    with TableInfo<$CounterEventsTable, CounterEvent> {
+class $CounterStatBucketsTable extends CounterStatBuckets
+    with TableInfo<$CounterStatBucketsTable, CounterStatBucket> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $CounterEventsTable(this.attachedDatabase, [this._alias]);
+  $CounterStatBucketsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -801,21 +801,57 @@ class $CounterEventsTable extends CounterEvents
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _deltaMeta = const VerificationMeta('delta');
+  static const VerificationMeta _bucketStartMeta = const VerificationMeta(
+    'bucketStart',
+  );
   @override
-  late final GeneratedColumn<int> delta = GeneratedColumn<int>(
-    'delta',
+  late final GeneratedColumn<DateTime> bucketStart = GeneratedColumn<DateTime>(
+    'bucket_start',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _yearMeta = const VerificationMeta('year');
+  @override
+  late final GeneratedColumn<int> year = GeneratedColumn<int>(
+    'year',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _countAfterMeta = const VerificationMeta(
-    'countAfter',
-  );
+  static const VerificationMeta _monthMeta = const VerificationMeta('month');
   @override
-  late final GeneratedColumn<int> countAfter = GeneratedColumn<int>(
-    'count_after',
+  late final GeneratedColumn<int> month = GeneratedColumn<int>(
+    'month',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<int> day = GeneratedColumn<int>(
+    'day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hourMeta = const VerificationMeta('hour');
+  @override
+  late final GeneratedColumn<int> hour = GeneratedColumn<int>(
+    'hour',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _countMeta = const VerificationMeta('count');
+  @override
+  late final GeneratedColumn<int> count = GeneratedColumn<int>(
+    'count',
     aliasedName,
     false,
     type: DriftSqlType.int,
@@ -828,17 +864,6 @@ class $CounterEventsTable extends CounterEvents
     aliasedName,
     false,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _eventTypeMeta = const VerificationMeta(
-    'eventType',
-  );
-  @override
-  late final GeneratedColumn<String> eventType = GeneratedColumn<String>(
-    'event_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
@@ -900,10 +925,13 @@ class $CounterEventsTable extends CounterEvents
     id,
     dhikrId,
     dhikrName,
-    delta,
-    countAfter,
+    bucketStart,
+    year,
+    month,
+    day,
+    hour,
+    count,
     target,
-    eventType,
     createdAt,
     updatedAt,
     deletedAt,
@@ -914,10 +942,10 @@ class $CounterEventsTable extends CounterEvents
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'counter_events';
+  static const String $name = 'counter_stat_buckets';
   @override
   VerificationContext validateIntegrity(
-    Insertable<CounterEvent> instance, {
+    Insertable<CounterStatBucket> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -943,21 +971,56 @@ class $CounterEventsTable extends CounterEvents
     } else if (isInserting) {
       context.missing(_dhikrNameMeta);
     }
-    if (data.containsKey('delta')) {
+    if (data.containsKey('bucket_start')) {
       context.handle(
-        _deltaMeta,
-        delta.isAcceptableOrUnknown(data['delta']!, _deltaMeta),
+        _bucketStartMeta,
+        bucketStart.isAcceptableOrUnknown(
+          data['bucket_start']!,
+          _bucketStartMeta,
+        ),
       );
     } else if (isInserting) {
-      context.missing(_deltaMeta);
+      context.missing(_bucketStartMeta);
     }
-    if (data.containsKey('count_after')) {
+    if (data.containsKey('year')) {
       context.handle(
-        _countAfterMeta,
-        countAfter.isAcceptableOrUnknown(data['count_after']!, _countAfterMeta),
+        _yearMeta,
+        year.isAcceptableOrUnknown(data['year']!, _yearMeta),
       );
     } else if (isInserting) {
-      context.missing(_countAfterMeta);
+      context.missing(_yearMeta);
+    }
+    if (data.containsKey('month')) {
+      context.handle(
+        _monthMeta,
+        month.isAcceptableOrUnknown(data['month']!, _monthMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_monthMeta);
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+        _dayMeta,
+        day.isAcceptableOrUnknown(data['day']!, _dayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('hour')) {
+      context.handle(
+        _hourMeta,
+        hour.isAcceptableOrUnknown(data['hour']!, _hourMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hourMeta);
+    }
+    if (data.containsKey('count')) {
+      context.handle(
+        _countMeta,
+        count.isAcceptableOrUnknown(data['count']!, _countMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_countMeta);
     }
     if (data.containsKey('target')) {
       context.handle(
@@ -966,14 +1029,6 @@ class $CounterEventsTable extends CounterEvents
       );
     } else if (isInserting) {
       context.missing(_targetMeta);
-    }
-    if (data.containsKey('event_type')) {
-      context.handle(
-        _eventTypeMeta,
-        eventType.isAcceptableOrUnknown(data['event_type']!, _eventTypeMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_eventTypeMeta);
     }
     if (data.containsKey('created_at')) {
       context.handle(
@@ -1015,9 +1070,9 @@ class $CounterEventsTable extends CounterEvents
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  CounterEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+  CounterStatBucket map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CounterEvent(
+    return CounterStatBucket(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -1030,21 +1085,33 @@ class $CounterEventsTable extends CounterEvents
         DriftSqlType.string,
         data['${effectivePrefix}dhikr_name'],
       )!,
-      delta: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}delta'],
+      bucketStart: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}bucket_start'],
       )!,
-      countAfter: attachedDatabase.typeMapping.read(
+      year: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}count_after'],
+        data['${effectivePrefix}year'],
+      )!,
+      month: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}month'],
+      )!,
+      day: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}day'],
+      )!,
+      hour: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hour'],
+      )!,
+      count: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count'],
       )!,
       target: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}target'],
-      )!,
-      eventType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}event_type'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -1070,32 +1137,39 @@ class $CounterEventsTable extends CounterEvents
   }
 
   @override
-  $CounterEventsTable createAlias(String alias) {
-    return $CounterEventsTable(attachedDatabase, alias);
+  $CounterStatBucketsTable createAlias(String alias) {
+    return $CounterStatBucketsTable(attachedDatabase, alias);
   }
 }
 
-class CounterEvent extends DataClass implements Insertable<CounterEvent> {
+class CounterStatBucket extends DataClass
+    implements Insertable<CounterStatBucket> {
   final String id;
   final String dhikrId;
   final String dhikrName;
-  final int delta;
-  final int countAfter;
+  final DateTime bucketStart;
+  final int year;
+  final int month;
+  final int day;
+  final int hour;
+  final int count;
   final int target;
-  final String eventType;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final String syncStatus;
   final String? userId;
-  const CounterEvent({
+  const CounterStatBucket({
     required this.id,
     required this.dhikrId,
     required this.dhikrName,
-    required this.delta,
-    required this.countAfter,
+    required this.bucketStart,
+    required this.year,
+    required this.month,
+    required this.day,
+    required this.hour,
+    required this.count,
     required this.target,
-    required this.eventType,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -1108,10 +1182,13 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
     map['id'] = Variable<String>(id);
     map['dhikr_id'] = Variable<String>(dhikrId);
     map['dhikr_name'] = Variable<String>(dhikrName);
-    map['delta'] = Variable<int>(delta);
-    map['count_after'] = Variable<int>(countAfter);
+    map['bucket_start'] = Variable<DateTime>(bucketStart);
+    map['year'] = Variable<int>(year);
+    map['month'] = Variable<int>(month);
+    map['day'] = Variable<int>(day);
+    map['hour'] = Variable<int>(hour);
+    map['count'] = Variable<int>(count);
     map['target'] = Variable<int>(target);
-    map['event_type'] = Variable<String>(eventType);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -1124,15 +1201,18 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
     return map;
   }
 
-  CounterEventsCompanion toCompanion(bool nullToAbsent) {
-    return CounterEventsCompanion(
+  CounterStatBucketsCompanion toCompanion(bool nullToAbsent) {
+    return CounterStatBucketsCompanion(
       id: Value(id),
       dhikrId: Value(dhikrId),
       dhikrName: Value(dhikrName),
-      delta: Value(delta),
-      countAfter: Value(countAfter),
+      bucketStart: Value(bucketStart),
+      year: Value(year),
+      month: Value(month),
+      day: Value(day),
+      hour: Value(hour),
+      count: Value(count),
       target: Value(target),
-      eventType: Value(eventType),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       deletedAt: deletedAt == null && nullToAbsent
@@ -1145,19 +1225,22 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
     );
   }
 
-  factory CounterEvent.fromJson(
+  factory CounterStatBucket.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CounterEvent(
+    return CounterStatBucket(
       id: serializer.fromJson<String>(json['id']),
       dhikrId: serializer.fromJson<String>(json['dhikrId']),
       dhikrName: serializer.fromJson<String>(json['dhikrName']),
-      delta: serializer.fromJson<int>(json['delta']),
-      countAfter: serializer.fromJson<int>(json['countAfter']),
+      bucketStart: serializer.fromJson<DateTime>(json['bucketStart']),
+      year: serializer.fromJson<int>(json['year']),
+      month: serializer.fromJson<int>(json['month']),
+      day: serializer.fromJson<int>(json['day']),
+      hour: serializer.fromJson<int>(json['hour']),
+      count: serializer.fromJson<int>(json['count']),
       target: serializer.fromJson<int>(json['target']),
-      eventType: serializer.fromJson<String>(json['eventType']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -1172,10 +1255,13 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
       'id': serializer.toJson<String>(id),
       'dhikrId': serializer.toJson<String>(dhikrId),
       'dhikrName': serializer.toJson<String>(dhikrName),
-      'delta': serializer.toJson<int>(delta),
-      'countAfter': serializer.toJson<int>(countAfter),
+      'bucketStart': serializer.toJson<DateTime>(bucketStart),
+      'year': serializer.toJson<int>(year),
+      'month': serializer.toJson<int>(month),
+      'day': serializer.toJson<int>(day),
+      'hour': serializer.toJson<int>(hour),
+      'count': serializer.toJson<int>(count),
       'target': serializer.toJson<int>(target),
-      'eventType': serializer.toJson<String>(eventType),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -1184,44 +1270,53 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
     };
   }
 
-  CounterEvent copyWith({
+  CounterStatBucket copyWith({
     String? id,
     String? dhikrId,
     String? dhikrName,
-    int? delta,
-    int? countAfter,
+    DateTime? bucketStart,
+    int? year,
+    int? month,
+    int? day,
+    int? hour,
+    int? count,
     int? target,
-    String? eventType,
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
     String? syncStatus,
     Value<String?> userId = const Value.absent(),
-  }) => CounterEvent(
+  }) => CounterStatBucket(
     id: id ?? this.id,
     dhikrId: dhikrId ?? this.dhikrId,
     dhikrName: dhikrName ?? this.dhikrName,
-    delta: delta ?? this.delta,
-    countAfter: countAfter ?? this.countAfter,
+    bucketStart: bucketStart ?? this.bucketStart,
+    year: year ?? this.year,
+    month: month ?? this.month,
+    day: day ?? this.day,
+    hour: hour ?? this.hour,
+    count: count ?? this.count,
     target: target ?? this.target,
-    eventType: eventType ?? this.eventType,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
     syncStatus: syncStatus ?? this.syncStatus,
     userId: userId.present ? userId.value : this.userId,
   );
-  CounterEvent copyWithCompanion(CounterEventsCompanion data) {
-    return CounterEvent(
+  CounterStatBucket copyWithCompanion(CounterStatBucketsCompanion data) {
+    return CounterStatBucket(
       id: data.id.present ? data.id.value : this.id,
       dhikrId: data.dhikrId.present ? data.dhikrId.value : this.dhikrId,
       dhikrName: data.dhikrName.present ? data.dhikrName.value : this.dhikrName,
-      delta: data.delta.present ? data.delta.value : this.delta,
-      countAfter: data.countAfter.present
-          ? data.countAfter.value
-          : this.countAfter,
+      bucketStart: data.bucketStart.present
+          ? data.bucketStart.value
+          : this.bucketStart,
+      year: data.year.present ? data.year.value : this.year,
+      month: data.month.present ? data.month.value : this.month,
+      day: data.day.present ? data.day.value : this.day,
+      hour: data.hour.present ? data.hour.value : this.hour,
+      count: data.count.present ? data.count.value : this.count,
       target: data.target.present ? data.target.value : this.target,
-      eventType: data.eventType.present ? data.eventType.value : this.eventType,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
@@ -1234,14 +1329,17 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
 
   @override
   String toString() {
-    return (StringBuffer('CounterEvent(')
+    return (StringBuffer('CounterStatBucket(')
           ..write('id: $id, ')
           ..write('dhikrId: $dhikrId, ')
           ..write('dhikrName: $dhikrName, ')
-          ..write('delta: $delta, ')
-          ..write('countAfter: $countAfter, ')
+          ..write('bucketStart: $bucketStart, ')
+          ..write('year: $year, ')
+          ..write('month: $month, ')
+          ..write('day: $day, ')
+          ..write('hour: $hour, ')
+          ..write('count: $count, ')
           ..write('target: $target, ')
-          ..write('eventType: $eventType, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -1256,10 +1354,13 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
     id,
     dhikrId,
     dhikrName,
-    delta,
-    countAfter,
+    bucketStart,
+    year,
+    month,
+    day,
+    hour,
+    count,
     target,
-    eventType,
     createdAt,
     updatedAt,
     deletedAt,
@@ -1269,14 +1370,17 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is CounterEvent &&
+      (other is CounterStatBucket &&
           other.id == this.id &&
           other.dhikrId == this.dhikrId &&
           other.dhikrName == this.dhikrName &&
-          other.delta == this.delta &&
-          other.countAfter == this.countAfter &&
+          other.bucketStart == this.bucketStart &&
+          other.year == this.year &&
+          other.month == this.month &&
+          other.day == this.day &&
+          other.hour == this.hour &&
+          other.count == this.count &&
           other.target == this.target &&
-          other.eventType == this.eventType &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt &&
@@ -1284,28 +1388,34 @@ class CounterEvent extends DataClass implements Insertable<CounterEvent> {
           other.userId == this.userId);
 }
 
-class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
+class CounterStatBucketsCompanion extends UpdateCompanion<CounterStatBucket> {
   final Value<String> id;
   final Value<String> dhikrId;
   final Value<String> dhikrName;
-  final Value<int> delta;
-  final Value<int> countAfter;
+  final Value<DateTime> bucketStart;
+  final Value<int> year;
+  final Value<int> month;
+  final Value<int> day;
+  final Value<int> hour;
+  final Value<int> count;
   final Value<int> target;
-  final Value<String> eventType;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
   final Value<String> syncStatus;
   final Value<String?> userId;
   final Value<int> rowid;
-  const CounterEventsCompanion({
+  const CounterStatBucketsCompanion({
     this.id = const Value.absent(),
     this.dhikrId = const Value.absent(),
     this.dhikrName = const Value.absent(),
-    this.delta = const Value.absent(),
-    this.countAfter = const Value.absent(),
+    this.bucketStart = const Value.absent(),
+    this.year = const Value.absent(),
+    this.month = const Value.absent(),
+    this.day = const Value.absent(),
+    this.hour = const Value.absent(),
+    this.count = const Value.absent(),
     this.target = const Value.absent(),
-    this.eventType = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -1313,14 +1423,17 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
     this.userId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  CounterEventsCompanion.insert({
+  CounterStatBucketsCompanion.insert({
     required String id,
     required String dhikrId,
     required String dhikrName,
-    required int delta,
-    required int countAfter,
+    required DateTime bucketStart,
+    required int year,
+    required int month,
+    required int day,
+    required int hour,
+    required int count,
     required int target,
-    required String eventType,
     required DateTime createdAt,
     required DateTime updatedAt,
     this.deletedAt = const Value.absent(),
@@ -1330,20 +1443,26 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
   }) : id = Value(id),
        dhikrId = Value(dhikrId),
        dhikrName = Value(dhikrName),
-       delta = Value(delta),
-       countAfter = Value(countAfter),
+       bucketStart = Value(bucketStart),
+       year = Value(year),
+       month = Value(month),
+       day = Value(day),
+       hour = Value(hour),
+       count = Value(count),
        target = Value(target),
-       eventType = Value(eventType),
        createdAt = Value(createdAt),
        updatedAt = Value(updatedAt);
-  static Insertable<CounterEvent> custom({
+  static Insertable<CounterStatBucket> custom({
     Expression<String>? id,
     Expression<String>? dhikrId,
     Expression<String>? dhikrName,
-    Expression<int>? delta,
-    Expression<int>? countAfter,
+    Expression<DateTime>? bucketStart,
+    Expression<int>? year,
+    Expression<int>? month,
+    Expression<int>? day,
+    Expression<int>? hour,
+    Expression<int>? count,
     Expression<int>? target,
-    Expression<String>? eventType,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
@@ -1355,10 +1474,13 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
       if (id != null) 'id': id,
       if (dhikrId != null) 'dhikr_id': dhikrId,
       if (dhikrName != null) 'dhikr_name': dhikrName,
-      if (delta != null) 'delta': delta,
-      if (countAfter != null) 'count_after': countAfter,
+      if (bucketStart != null) 'bucket_start': bucketStart,
+      if (year != null) 'year': year,
+      if (month != null) 'month': month,
+      if (day != null) 'day': day,
+      if (hour != null) 'hour': hour,
+      if (count != null) 'count': count,
       if (target != null) 'target': target,
-      if (eventType != null) 'event_type': eventType,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
@@ -1368,14 +1490,17 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
     });
   }
 
-  CounterEventsCompanion copyWith({
+  CounterStatBucketsCompanion copyWith({
     Value<String>? id,
     Value<String>? dhikrId,
     Value<String>? dhikrName,
-    Value<int>? delta,
-    Value<int>? countAfter,
+    Value<DateTime>? bucketStart,
+    Value<int>? year,
+    Value<int>? month,
+    Value<int>? day,
+    Value<int>? hour,
+    Value<int>? count,
     Value<int>? target,
-    Value<String>? eventType,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
@@ -1383,14 +1508,17 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
     Value<String?>? userId,
     Value<int>? rowid,
   }) {
-    return CounterEventsCompanion(
+    return CounterStatBucketsCompanion(
       id: id ?? this.id,
       dhikrId: dhikrId ?? this.dhikrId,
       dhikrName: dhikrName ?? this.dhikrName,
-      delta: delta ?? this.delta,
-      countAfter: countAfter ?? this.countAfter,
+      bucketStart: bucketStart ?? this.bucketStart,
+      year: year ?? this.year,
+      month: month ?? this.month,
+      day: day ?? this.day,
+      hour: hour ?? this.hour,
+      count: count ?? this.count,
       target: target ?? this.target,
-      eventType: eventType ?? this.eventType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -1412,17 +1540,26 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
     if (dhikrName.present) {
       map['dhikr_name'] = Variable<String>(dhikrName.value);
     }
-    if (delta.present) {
-      map['delta'] = Variable<int>(delta.value);
+    if (bucketStart.present) {
+      map['bucket_start'] = Variable<DateTime>(bucketStart.value);
     }
-    if (countAfter.present) {
-      map['count_after'] = Variable<int>(countAfter.value);
+    if (year.present) {
+      map['year'] = Variable<int>(year.value);
+    }
+    if (month.present) {
+      map['month'] = Variable<int>(month.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<int>(day.value);
+    }
+    if (hour.present) {
+      map['hour'] = Variable<int>(hour.value);
+    }
+    if (count.present) {
+      map['count'] = Variable<int>(count.value);
     }
     if (target.present) {
       map['target'] = Variable<int>(target.value);
-    }
-    if (eventType.present) {
-      map['event_type'] = Variable<String>(eventType.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1447,15 +1584,720 @@ class CounterEventsCompanion extends UpdateCompanion<CounterEvent> {
 
   @override
   String toString() {
-    return (StringBuffer('CounterEventsCompanion(')
+    return (StringBuffer('CounterStatBucketsCompanion(')
           ..write('id: $id, ')
           ..write('dhikrId: $dhikrId, ')
           ..write('dhikrName: $dhikrName, ')
-          ..write('delta: $delta, ')
-          ..write('countAfter: $countAfter, ')
+          ..write('bucketStart: $bucketStart, ')
+          ..write('year: $year, ')
+          ..write('month: $month, ')
+          ..write('day: $day, ')
+          ..write('hour: $hour, ')
+          ..write('count: $count, ')
           ..write('target: $target, ')
-          ..write('eventType: $eventType, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('userId: $userId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CounterSessionsTable extends CounterSessions
+    with TableInfo<$CounterSessionsTable, CounterSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CounterSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dhikrIdMeta = const VerificationMeta(
+    'dhikrId',
+  );
+  @override
+  late final GeneratedColumn<String> dhikrId = GeneratedColumn<String>(
+    'dhikr_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dhikrNameMeta = const VerificationMeta(
+    'dhikrName',
+  );
+  @override
+  late final GeneratedColumn<String> dhikrName = GeneratedColumn<String>(
+    'dhikr_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _countMeta = const VerificationMeta('count');
+  @override
+  late final GeneratedColumn<int> count = GeneratedColumn<int>(
+    'count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetMeta = const VerificationMeta('target');
+  @override
+  late final GeneratedColumn<int> target = GeneratedColumn<int>(
+    'target',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(_counterSessionStatusActive),
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pendingUpload'),
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dhikrId,
+    dhikrName,
+    count,
+    target,
+    status,
+    startedAt,
+    completedAt,
+    updatedAt,
+    deletedAt,
+    syncStatus,
+    userId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'counter_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CounterSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('dhikr_id')) {
+      context.handle(
+        _dhikrIdMeta,
+        dhikrId.isAcceptableOrUnknown(data['dhikr_id']!, _dhikrIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dhikrIdMeta);
+    }
+    if (data.containsKey('dhikr_name')) {
+      context.handle(
+        _dhikrNameMeta,
+        dhikrName.isAcceptableOrUnknown(data['dhikr_name']!, _dhikrNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dhikrNameMeta);
+    }
+    if (data.containsKey('count')) {
+      context.handle(
+        _countMeta,
+        count.isAcceptableOrUnknown(data['count']!, _countMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_countMeta);
+    }
+    if (data.containsKey('target')) {
+      context.handle(
+        _targetMeta,
+        target.isAcceptableOrUnknown(data['target']!, _targetMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CounterSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CounterSession(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dhikrId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dhikr_id'],
+      )!,
+      dhikrName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dhikr_name'],
+      )!,
+      count: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count'],
+      )!,
+      target: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      ),
+    );
+  }
+
+  @override
+  $CounterSessionsTable createAlias(String alias) {
+    return $CounterSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class CounterSession extends DataClass implements Insertable<CounterSession> {
+  final String id;
+  final String dhikrId;
+  final String dhikrName;
+  final int count;
+  final int target;
+  final String status;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final String syncStatus;
+  final String? userId;
+  const CounterSession({
+    required this.id,
+    required this.dhikrId,
+    required this.dhikrName,
+    required this.count,
+    required this.target,
+    required this.status,
+    required this.startedAt,
+    this.completedAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.syncStatus,
+    this.userId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['dhikr_id'] = Variable<String>(dhikrId);
+    map['dhikr_name'] = Variable<String>(dhikrName);
+    map['count'] = Variable<int>(count);
+    map['target'] = Variable<int>(target);
+    map['status'] = Variable<String>(status);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['sync_status'] = Variable<String>(syncStatus);
+    if (!nullToAbsent || userId != null) {
+      map['user_id'] = Variable<String>(userId);
+    }
+    return map;
+  }
+
+  CounterSessionsCompanion toCompanion(bool nullToAbsent) {
+    return CounterSessionsCompanion(
+      id: Value(id),
+      dhikrId: Value(dhikrId),
+      dhikrName: Value(dhikrName),
+      count: Value(count),
+      target: Value(target),
+      status: Value(status),
+      startedAt: Value(startedAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      syncStatus: Value(syncStatus),
+      userId: userId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userId),
+    );
+  }
+
+  factory CounterSession.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CounterSession(
+      id: serializer.fromJson<String>(json['id']),
+      dhikrId: serializer.fromJson<String>(json['dhikrId']),
+      dhikrName: serializer.fromJson<String>(json['dhikrName']),
+      count: serializer.fromJson<int>(json['count']),
+      target: serializer.fromJson<int>(json['target']),
+      status: serializer.fromJson<String>(json['status']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+      userId: serializer.fromJson<String?>(json['userId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dhikrId': serializer.toJson<String>(dhikrId),
+      'dhikrName': serializer.toJson<String>(dhikrName),
+      'count': serializer.toJson<int>(count),
+      'target': serializer.toJson<int>(target),
+      'status': serializer.toJson<String>(status),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+      'userId': serializer.toJson<String?>(userId),
+    };
+  }
+
+  CounterSession copyWith({
+    String? id,
+    String? dhikrId,
+    String? dhikrName,
+    int? count,
+    int? target,
+    String? status,
+    DateTime? startedAt,
+    Value<DateTime?> completedAt = const Value.absent(),
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? syncStatus,
+    Value<String?> userId = const Value.absent(),
+  }) => CounterSession(
+    id: id ?? this.id,
+    dhikrId: dhikrId ?? this.dhikrId,
+    dhikrName: dhikrName ?? this.dhikrName,
+    count: count ?? this.count,
+    target: target ?? this.target,
+    status: status ?? this.status,
+    startedAt: startedAt ?? this.startedAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    syncStatus: syncStatus ?? this.syncStatus,
+    userId: userId.present ? userId.value : this.userId,
+  );
+  CounterSession copyWithCompanion(CounterSessionsCompanion data) {
+    return CounterSession(
+      id: data.id.present ? data.id.value : this.id,
+      dhikrId: data.dhikrId.present ? data.dhikrId.value : this.dhikrId,
+      dhikrName: data.dhikrName.present ? data.dhikrName.value : this.dhikrName,
+      count: data.count.present ? data.count.value : this.count,
+      target: data.target.present ? data.target.value : this.target,
+      status: data.status.present ? data.status.value : this.status,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+      userId: data.userId.present ? data.userId.value : this.userId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CounterSession(')
+          ..write('id: $id, ')
+          ..write('dhikrId: $dhikrId, ')
+          ..write('dhikrName: $dhikrName, ')
+          ..write('count: $count, ')
+          ..write('target: $target, ')
+          ..write('status: $status, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('userId: $userId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dhikrId,
+    dhikrName,
+    count,
+    target,
+    status,
+    startedAt,
+    completedAt,
+    updatedAt,
+    deletedAt,
+    syncStatus,
+    userId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CounterSession &&
+          other.id == this.id &&
+          other.dhikrId == this.dhikrId &&
+          other.dhikrName == this.dhikrName &&
+          other.count == this.count &&
+          other.target == this.target &&
+          other.status == this.status &&
+          other.startedAt == this.startedAt &&
+          other.completedAt == this.completedAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.syncStatus == this.syncStatus &&
+          other.userId == this.userId);
+}
+
+class CounterSessionsCompanion extends UpdateCompanion<CounterSession> {
+  final Value<String> id;
+  final Value<String> dhikrId;
+  final Value<String> dhikrName;
+  final Value<int> count;
+  final Value<int> target;
+  final Value<String> status;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> completedAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> syncStatus;
+  final Value<String?> userId;
+  final Value<int> rowid;
+  const CounterSessionsCompanion({
+    this.id = const Value.absent(),
+    this.dhikrId = const Value.absent(),
+    this.dhikrName = const Value.absent(),
+    this.count = const Value.absent(),
+    this.target = const Value.absent(),
+    this.status = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CounterSessionsCompanion.insert({
+    required String id,
+    required String dhikrId,
+    required String dhikrName,
+    required int count,
+    required int target,
+    this.status = const Value.absent(),
+    required DateTime startedAt,
+    this.completedAt = const Value.absent(),
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       dhikrId = Value(dhikrId),
+       dhikrName = Value(dhikrName),
+       count = Value(count),
+       target = Value(target),
+       startedAt = Value(startedAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<CounterSession> custom({
+    Expression<String>? id,
+    Expression<String>? dhikrId,
+    Expression<String>? dhikrName,
+    Expression<int>? count,
+    Expression<int>? target,
+    Expression<String>? status,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? completedAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? syncStatus,
+    Expression<String>? userId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dhikrId != null) 'dhikr_id': dhikrId,
+      if (dhikrName != null) 'dhikr_name': dhikrName,
+      if (count != null) 'count': count,
+      if (target != null) 'target': target,
+      if (status != null) 'status': status,
+      if (startedAt != null) 'started_at': startedAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (userId != null) 'user_id': userId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CounterSessionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? dhikrId,
+    Value<String>? dhikrName,
+    Value<int>? count,
+    Value<int>? target,
+    Value<String>? status,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? completedAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? syncStatus,
+    Value<String?>? userId,
+    Value<int>? rowid,
+  }) {
+    return CounterSessionsCompanion(
+      id: id ?? this.id,
+      dhikrId: dhikrId ?? this.dhikrId,
+      dhikrName: dhikrName ?? this.dhikrName,
+      count: count ?? this.count,
+      target: target ?? this.target,
+      status: status ?? this.status,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+      userId: userId ?? this.userId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dhikrId.present) {
+      map['dhikr_id'] = Variable<String>(dhikrId.value);
+    }
+    if (dhikrName.present) {
+      map['dhikr_name'] = Variable<String>(dhikrName.value);
+    }
+    if (count.present) {
+      map['count'] = Variable<int>(count.value);
+    }
+    if (target.present) {
+      map['target'] = Variable<int>(target.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CounterSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('dhikrId: $dhikrId, ')
+          ..write('dhikrName: $dhikrName, ')
+          ..write('count: $count, ')
+          ..write('target: $target, ')
+          ..write('status: $status, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
           ..write('syncStatus: $syncStatus, ')
@@ -1516,6 +2358,29 @@ class $ReminderRecordsTable extends ReminderRecords
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _repeatDaysMeta = const VerificationMeta(
+    'repeatDays',
+  );
+  @override
+  late final GeneratedColumn<String> repeatDays = GeneratedColumn<String>(
+    'repeat_days',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(_defaultReminderRepeatDays),
+  );
+  static const VerificationMeta _targetDhikrIdMeta = const VerificationMeta(
+    'targetDhikrId',
+  );
+  @override
+  late final GeneratedColumn<String> targetDhikrId = GeneratedColumn<String>(
+    'target_dhikr_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _enabledMeta = const VerificationMeta(
     'enabled',
@@ -1593,6 +2458,8 @@ class $ReminderRecordsTable extends ReminderRecords
     body,
     hour,
     minute,
+    repeatDays,
+    targetDhikrId,
     enabled,
     createdAt,
     updatedAt,
@@ -1648,6 +2515,21 @@ class $ReminderRecordsTable extends ReminderRecords
       );
     } else if (isInserting) {
       context.missing(_minuteMeta);
+    }
+    if (data.containsKey('repeat_days')) {
+      context.handle(
+        _repeatDaysMeta,
+        repeatDays.isAcceptableOrUnknown(data['repeat_days']!, _repeatDaysMeta),
+      );
+    }
+    if (data.containsKey('target_dhikr_id')) {
+      context.handle(
+        _targetDhikrIdMeta,
+        targetDhikrId.isAcceptableOrUnknown(
+          data['target_dhikr_id']!,
+          _targetDhikrIdMeta,
+        ),
+      );
     }
     if (data.containsKey('enabled')) {
       context.handle(
@@ -1718,6 +2600,14 @@ class $ReminderRecordsTable extends ReminderRecords
         DriftSqlType.int,
         data['${effectivePrefix}minute'],
       )!,
+      repeatDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_days'],
+      )!,
+      targetDhikrId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_dhikr_id'],
+      ),
       enabled: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
@@ -1757,6 +2647,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
   final String body;
   final int hour;
   final int minute;
+  final String repeatDays;
+  final String? targetDhikrId;
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -1769,6 +2661,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
     required this.body,
     required this.hour,
     required this.minute,
+    required this.repeatDays,
+    this.targetDhikrId,
     required this.enabled,
     required this.createdAt,
     required this.updatedAt,
@@ -1784,6 +2678,10 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
     map['body'] = Variable<String>(body);
     map['hour'] = Variable<int>(hour);
     map['minute'] = Variable<int>(minute);
+    map['repeat_days'] = Variable<String>(repeatDays);
+    if (!nullToAbsent || targetDhikrId != null) {
+      map['target_dhikr_id'] = Variable<String>(targetDhikrId);
+    }
     map['enabled'] = Variable<bool>(enabled);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1804,6 +2702,10 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
       body: Value(body),
       hour: Value(hour),
       minute: Value(minute),
+      repeatDays: Value(repeatDays),
+      targetDhikrId: targetDhikrId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(targetDhikrId),
       enabled: Value(enabled),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -1828,6 +2730,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
       body: serializer.fromJson<String>(json['body']),
       hour: serializer.fromJson<int>(json['hour']),
       minute: serializer.fromJson<int>(json['minute']),
+      repeatDays: serializer.fromJson<String>(json['repeatDays']),
+      targetDhikrId: serializer.fromJson<String?>(json['targetDhikrId']),
       enabled: serializer.fromJson<bool>(json['enabled']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -1845,6 +2749,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
       'body': serializer.toJson<String>(body),
       'hour': serializer.toJson<int>(hour),
       'minute': serializer.toJson<int>(minute),
+      'repeatDays': serializer.toJson<String>(repeatDays),
+      'targetDhikrId': serializer.toJson<String?>(targetDhikrId),
       'enabled': serializer.toJson<bool>(enabled),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -1860,6 +2766,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
     String? body,
     int? hour,
     int? minute,
+    String? repeatDays,
+    Value<String?> targetDhikrId = const Value.absent(),
     bool? enabled,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -1872,6 +2780,10 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
     body: body ?? this.body,
     hour: hour ?? this.hour,
     minute: minute ?? this.minute,
+    repeatDays: repeatDays ?? this.repeatDays,
+    targetDhikrId: targetDhikrId.present
+        ? targetDhikrId.value
+        : this.targetDhikrId,
     enabled: enabled ?? this.enabled,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -1886,6 +2798,12 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
       body: data.body.present ? data.body.value : this.body,
       hour: data.hour.present ? data.hour.value : this.hour,
       minute: data.minute.present ? data.minute.value : this.minute,
+      repeatDays: data.repeatDays.present
+          ? data.repeatDays.value
+          : this.repeatDays,
+      targetDhikrId: data.targetDhikrId.present
+          ? data.targetDhikrId.value
+          : this.targetDhikrId,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1905,6 +2823,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
           ..write('body: $body, ')
           ..write('hour: $hour, ')
           ..write('minute: $minute, ')
+          ..write('repeatDays: $repeatDays, ')
+          ..write('targetDhikrId: $targetDhikrId, ')
           ..write('enabled: $enabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -1922,6 +2842,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
     body,
     hour,
     minute,
+    repeatDays,
+    targetDhikrId,
     enabled,
     createdAt,
     updatedAt,
@@ -1938,6 +2860,8 @@ class ReminderRecord extends DataClass implements Insertable<ReminderRecord> {
           other.body == this.body &&
           other.hour == this.hour &&
           other.minute == this.minute &&
+          other.repeatDays == this.repeatDays &&
+          other.targetDhikrId == this.targetDhikrId &&
           other.enabled == this.enabled &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -1952,6 +2876,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
   final Value<String> body;
   final Value<int> hour;
   final Value<int> minute;
+  final Value<String> repeatDays;
+  final Value<String?> targetDhikrId;
   final Value<bool> enabled;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -1965,6 +2891,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
     this.body = const Value.absent(),
     this.hour = const Value.absent(),
     this.minute = const Value.absent(),
+    this.repeatDays = const Value.absent(),
+    this.targetDhikrId = const Value.absent(),
     this.enabled = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1979,6 +2907,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
     required String body,
     required int hour,
     required int minute,
+    this.repeatDays = const Value.absent(),
+    this.targetDhikrId = const Value.absent(),
     this.enabled = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -1999,6 +2929,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
     Expression<String>? body,
     Expression<int>? hour,
     Expression<int>? minute,
+    Expression<String>? repeatDays,
+    Expression<String>? targetDhikrId,
     Expression<bool>? enabled,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -2013,6 +2945,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
       if (body != null) 'body': body,
       if (hour != null) 'hour': hour,
       if (minute != null) 'minute': minute,
+      if (repeatDays != null) 'repeat_days': repeatDays,
+      if (targetDhikrId != null) 'target_dhikr_id': targetDhikrId,
       if (enabled != null) 'enabled': enabled,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2029,6 +2963,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
     Value<String>? body,
     Value<int>? hour,
     Value<int>? minute,
+    Value<String>? repeatDays,
+    Value<String?>? targetDhikrId,
     Value<bool>? enabled,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -2043,6 +2979,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
       body: body ?? this.body,
       hour: hour ?? this.hour,
       minute: minute ?? this.minute,
+      repeatDays: repeatDays ?? this.repeatDays,
+      targetDhikrId: targetDhikrId ?? this.targetDhikrId,
       enabled: enabled ?? this.enabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2070,6 +3008,12 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
     }
     if (minute.present) {
       map['minute'] = Variable<int>(minute.value);
+    }
+    if (repeatDays.present) {
+      map['repeat_days'] = Variable<String>(repeatDays.value);
+    }
+    if (targetDhikrId.present) {
+      map['target_dhikr_id'] = Variable<String>(targetDhikrId.value);
     }
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
@@ -2103,6 +3047,8 @@ class ReminderRecordsCompanion extends UpdateCompanion<ReminderRecord> {
           ..write('body: $body, ')
           ..write('hour: $hour, ')
           ..write('minute: $minute, ')
+          ..write('repeatDays: $repeatDays, ')
+          ..write('targetDhikrId: $targetDhikrId, ')
           ..write('enabled: $enabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2722,7 +3668,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $DhikrRecordsTable dhikrRecords = $DhikrRecordsTable(this);
-  late final $CounterEventsTable counterEvents = $CounterEventsTable(this);
+  late final $CounterStatBucketsTable counterStatBuckets =
+      $CounterStatBucketsTable(this);
+  late final $CounterSessionsTable counterSessions = $CounterSessionsTable(
+    this,
+  );
   late final $ReminderRecordsTable reminderRecords = $ReminderRecordsTable(
     this,
   );
@@ -2734,7 +3684,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     dhikrRecords,
-    counterEvents,
+    counterStatBuckets,
+    counterSessions,
     reminderRecords,
     virdProgressRecords,
   ];
@@ -3100,15 +4051,18 @@ typedef $$DhikrRecordsTableProcessedTableManager =
       DhikrRecord,
       PrefetchHooks Function()
     >;
-typedef $$CounterEventsTableCreateCompanionBuilder =
-    CounterEventsCompanion Function({
+typedef $$CounterStatBucketsTableCreateCompanionBuilder =
+    CounterStatBucketsCompanion Function({
       required String id,
       required String dhikrId,
       required String dhikrName,
-      required int delta,
-      required int countAfter,
+      required DateTime bucketStart,
+      required int year,
+      required int month,
+      required int day,
+      required int hour,
+      required int count,
       required int target,
-      required String eventType,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
@@ -3116,15 +4070,18 @@ typedef $$CounterEventsTableCreateCompanionBuilder =
       Value<String?> userId,
       Value<int> rowid,
     });
-typedef $$CounterEventsTableUpdateCompanionBuilder =
-    CounterEventsCompanion Function({
+typedef $$CounterStatBucketsTableUpdateCompanionBuilder =
+    CounterStatBucketsCompanion Function({
       Value<String> id,
       Value<String> dhikrId,
       Value<String> dhikrName,
-      Value<int> delta,
-      Value<int> countAfter,
+      Value<DateTime> bucketStart,
+      Value<int> year,
+      Value<int> month,
+      Value<int> day,
+      Value<int> hour,
+      Value<int> count,
       Value<int> target,
-      Value<String> eventType,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -3133,9 +4090,9 @@ typedef $$CounterEventsTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$CounterEventsTableFilterComposer
-    extends Composer<_$AppDatabase, $CounterEventsTable> {
-  $$CounterEventsTableFilterComposer({
+class $$CounterStatBucketsTableFilterComposer
+    extends Composer<_$AppDatabase, $CounterStatBucketsTable> {
+  $$CounterStatBucketsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -3157,23 +4114,38 @@ class $$CounterEventsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get delta => $composableBuilder(
-    column: $table.delta,
+  ColumnFilters<DateTime> get bucketStart => $composableBuilder(
+    column: $table.bucketStart,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get countAfter => $composableBuilder(
-    column: $table.countAfter,
+  ColumnFilters<int> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get month => $composableBuilder(
+    column: $table.month,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get day => $composableBuilder(
+    column: $table.day,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hour => $composableBuilder(
+    column: $table.hour,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get count => $composableBuilder(
+    column: $table.count,
     builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<int> get target => $composableBuilder(
     column: $table.target,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get eventType => $composableBuilder(
-    column: $table.eventType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3203,9 +4175,9 @@ class $$CounterEventsTableFilterComposer
   );
 }
 
-class $$CounterEventsTableOrderingComposer
-    extends Composer<_$AppDatabase, $CounterEventsTable> {
-  $$CounterEventsTableOrderingComposer({
+class $$CounterStatBucketsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CounterStatBucketsTable> {
+  $$CounterStatBucketsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -3227,23 +4199,38 @@ class $$CounterEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get delta => $composableBuilder(
-    column: $table.delta,
+  ColumnOrderings<DateTime> get bucketStart => $composableBuilder(
+    column: $table.bucketStart,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get countAfter => $composableBuilder(
-    column: $table.countAfter,
+  ColumnOrderings<int> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get month => $composableBuilder(
+    column: $table.month,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get day => $composableBuilder(
+    column: $table.day,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hour => $composableBuilder(
+    column: $table.hour,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get count => $composableBuilder(
+    column: $table.count,
     builder: (column) => ColumnOrderings(column),
   );
 
   ColumnOrderings<int> get target => $composableBuilder(
     column: $table.target,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get eventType => $composableBuilder(
-    column: $table.eventType,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -3273,9 +4260,9 @@ class $$CounterEventsTableOrderingComposer
   );
 }
 
-class $$CounterEventsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $CounterEventsTable> {
-  $$CounterEventsTableAnnotationComposer({
+class $$CounterStatBucketsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CounterStatBucketsTable> {
+  $$CounterStatBucketsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -3291,19 +4278,28 @@ class $$CounterEventsTableAnnotationComposer
   GeneratedColumn<String> get dhikrName =>
       $composableBuilder(column: $table.dhikrName, builder: (column) => column);
 
-  GeneratedColumn<int> get delta =>
-      $composableBuilder(column: $table.delta, builder: (column) => column);
-
-  GeneratedColumn<int> get countAfter => $composableBuilder(
-    column: $table.countAfter,
+  GeneratedColumn<DateTime> get bucketStart => $composableBuilder(
+    column: $table.bucketStart,
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get year =>
+      $composableBuilder(column: $table.year, builder: (column) => column);
+
+  GeneratedColumn<int> get month =>
+      $composableBuilder(column: $table.month, builder: (column) => column);
+
+  GeneratedColumn<int> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<int> get hour =>
+      $composableBuilder(column: $table.hour, builder: (column) => column);
+
+  GeneratedColumn<int> get count =>
+      $composableBuilder(column: $table.count, builder: (column) => column);
+
   GeneratedColumn<int> get target =>
       $composableBuilder(column: $table.target, builder: (column) => column);
-
-  GeneratedColumn<String> get eventType =>
-      $composableBuilder(column: $table.eventType, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3323,58 +4319,73 @@ class $$CounterEventsTableAnnotationComposer
       $composableBuilder(column: $table.userId, builder: (column) => column);
 }
 
-class $$CounterEventsTableTableManager
+class $$CounterStatBucketsTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $CounterEventsTable,
-          CounterEvent,
-          $$CounterEventsTableFilterComposer,
-          $$CounterEventsTableOrderingComposer,
-          $$CounterEventsTableAnnotationComposer,
-          $$CounterEventsTableCreateCompanionBuilder,
-          $$CounterEventsTableUpdateCompanionBuilder,
+          $CounterStatBucketsTable,
+          CounterStatBucket,
+          $$CounterStatBucketsTableFilterComposer,
+          $$CounterStatBucketsTableOrderingComposer,
+          $$CounterStatBucketsTableAnnotationComposer,
+          $$CounterStatBucketsTableCreateCompanionBuilder,
+          $$CounterStatBucketsTableUpdateCompanionBuilder,
           (
-            CounterEvent,
-            BaseReferences<_$AppDatabase, $CounterEventsTable, CounterEvent>,
+            CounterStatBucket,
+            BaseReferences<
+              _$AppDatabase,
+              $CounterStatBucketsTable,
+              CounterStatBucket
+            >,
           ),
-          CounterEvent,
+          CounterStatBucket,
           PrefetchHooks Function()
         > {
-  $$CounterEventsTableTableManager(_$AppDatabase db, $CounterEventsTable table)
-    : super(
+  $$CounterStatBucketsTableTableManager(
+    _$AppDatabase db,
+    $CounterStatBucketsTable table,
+  ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$CounterEventsTableFilterComposer($db: db, $table: table),
+              $$CounterStatBucketsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$CounterEventsTableOrderingComposer($db: db, $table: table),
+              $$CounterStatBucketsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$CounterEventsTableAnnotationComposer($db: db, $table: table),
+              $$CounterStatBucketsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> dhikrId = const Value.absent(),
                 Value<String> dhikrName = const Value.absent(),
-                Value<int> delta = const Value.absent(),
-                Value<int> countAfter = const Value.absent(),
+                Value<DateTime> bucketStart = const Value.absent(),
+                Value<int> year = const Value.absent(),
+                Value<int> month = const Value.absent(),
+                Value<int> day = const Value.absent(),
+                Value<int> hour = const Value.absent(),
+                Value<int> count = const Value.absent(),
                 Value<int> target = const Value.absent(),
-                Value<String> eventType = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<String> syncStatus = const Value.absent(),
                 Value<String?> userId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => CounterEventsCompanion(
+              }) => CounterStatBucketsCompanion(
                 id: id,
                 dhikrId: dhikrId,
                 dhikrName: dhikrName,
-                delta: delta,
-                countAfter: countAfter,
+                bucketStart: bucketStart,
+                year: year,
+                month: month,
+                day: day,
+                hour: hour,
+                count: count,
                 target: target,
-                eventType: eventType,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -3387,24 +4398,30 @@ class $$CounterEventsTableTableManager
                 required String id,
                 required String dhikrId,
                 required String dhikrName,
-                required int delta,
-                required int countAfter,
+                required DateTime bucketStart,
+                required int year,
+                required int month,
+                required int day,
+                required int hour,
+                required int count,
                 required int target,
-                required String eventType,
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<String> syncStatus = const Value.absent(),
                 Value<String?> userId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => CounterEventsCompanion.insert(
+              }) => CounterStatBucketsCompanion.insert(
                 id: id,
                 dhikrId: dhikrId,
                 dhikrName: dhikrName,
-                delta: delta,
-                countAfter: countAfter,
+                bucketStart: bucketStart,
+                year: year,
+                month: month,
+                day: day,
+                hour: hour,
+                count: count,
                 target: target,
-                eventType: eventType,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -3420,21 +4437,368 @@ class $$CounterEventsTableTableManager
       );
 }
 
-typedef $$CounterEventsTableProcessedTableManager =
+typedef $$CounterStatBucketsTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $CounterEventsTable,
-      CounterEvent,
-      $$CounterEventsTableFilterComposer,
-      $$CounterEventsTableOrderingComposer,
-      $$CounterEventsTableAnnotationComposer,
-      $$CounterEventsTableCreateCompanionBuilder,
-      $$CounterEventsTableUpdateCompanionBuilder,
+      $CounterStatBucketsTable,
+      CounterStatBucket,
+      $$CounterStatBucketsTableFilterComposer,
+      $$CounterStatBucketsTableOrderingComposer,
+      $$CounterStatBucketsTableAnnotationComposer,
+      $$CounterStatBucketsTableCreateCompanionBuilder,
+      $$CounterStatBucketsTableUpdateCompanionBuilder,
       (
-        CounterEvent,
-        BaseReferences<_$AppDatabase, $CounterEventsTable, CounterEvent>,
+        CounterStatBucket,
+        BaseReferences<
+          _$AppDatabase,
+          $CounterStatBucketsTable,
+          CounterStatBucket
+        >,
       ),
-      CounterEvent,
+      CounterStatBucket,
+      PrefetchHooks Function()
+    >;
+typedef $$CounterSessionsTableCreateCompanionBuilder =
+    CounterSessionsCompanion Function({
+      required String id,
+      required String dhikrId,
+      required String dhikrName,
+      required int count,
+      required int target,
+      Value<String> status,
+      required DateTime startedAt,
+      Value<DateTime?> completedAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> syncStatus,
+      Value<String?> userId,
+      Value<int> rowid,
+    });
+typedef $$CounterSessionsTableUpdateCompanionBuilder =
+    CounterSessionsCompanion Function({
+      Value<String> id,
+      Value<String> dhikrId,
+      Value<String> dhikrName,
+      Value<int> count,
+      Value<int> target,
+      Value<String> status,
+      Value<DateTime> startedAt,
+      Value<DateTime?> completedAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> syncStatus,
+      Value<String?> userId,
+      Value<int> rowid,
+    });
+
+class $$CounterSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $CounterSessionsTable> {
+  $$CounterSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dhikrId => $composableBuilder(
+    column: $table.dhikrId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dhikrName => $composableBuilder(
+    column: $table.dhikrName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get count => $composableBuilder(
+    column: $table.count,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CounterSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CounterSessionsTable> {
+  $$CounterSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dhikrId => $composableBuilder(
+    column: $table.dhikrId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dhikrName => $composableBuilder(
+    column: $table.dhikrName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get count => $composableBuilder(
+    column: $table.count,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get target => $composableBuilder(
+    column: $table.target,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CounterSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CounterSessionsTable> {
+  $$CounterSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dhikrId =>
+      $composableBuilder(column: $table.dhikrId, builder: (column) => column);
+
+  GeneratedColumn<String> get dhikrName =>
+      $composableBuilder(column: $table.dhikrName, builder: (column) => column);
+
+  GeneratedColumn<int> get count =>
+      $composableBuilder(column: $table.count, builder: (column) => column);
+
+  GeneratedColumn<int> get target =>
+      $composableBuilder(column: $table.target, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+}
+
+class $$CounterSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CounterSessionsTable,
+          CounterSession,
+          $$CounterSessionsTableFilterComposer,
+          $$CounterSessionsTableOrderingComposer,
+          $$CounterSessionsTableAnnotationComposer,
+          $$CounterSessionsTableCreateCompanionBuilder,
+          $$CounterSessionsTableUpdateCompanionBuilder,
+          (
+            CounterSession,
+            BaseReferences<
+              _$AppDatabase,
+              $CounterSessionsTable,
+              CounterSession
+            >,
+          ),
+          CounterSession,
+          PrefetchHooks Function()
+        > {
+  $$CounterSessionsTableTableManager(
+    _$AppDatabase db,
+    $CounterSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CounterSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CounterSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CounterSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> dhikrId = const Value.absent(),
+                Value<String> dhikrName = const Value.absent(),
+                Value<int> count = const Value.absent(),
+                Value<int> target = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CounterSessionsCompanion(
+                id: id,
+                dhikrId: dhikrId,
+                dhikrName: dhikrName,
+                count: count,
+                target: target,
+                status: status,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                syncStatus: syncStatus,
+                userId: userId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String dhikrId,
+                required String dhikrName,
+                required int count,
+                required int target,
+                Value<String> status = const Value.absent(),
+                required DateTime startedAt,
+                Value<DateTime?> completedAt = const Value.absent(),
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CounterSessionsCompanion.insert(
+                id: id,
+                dhikrId: dhikrId,
+                dhikrName: dhikrName,
+                count: count,
+                target: target,
+                status: status,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                syncStatus: syncStatus,
+                userId: userId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CounterSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CounterSessionsTable,
+      CounterSession,
+      $$CounterSessionsTableFilterComposer,
+      $$CounterSessionsTableOrderingComposer,
+      $$CounterSessionsTableAnnotationComposer,
+      $$CounterSessionsTableCreateCompanionBuilder,
+      $$CounterSessionsTableUpdateCompanionBuilder,
+      (
+        CounterSession,
+        BaseReferences<_$AppDatabase, $CounterSessionsTable, CounterSession>,
+      ),
+      CounterSession,
       PrefetchHooks Function()
     >;
 typedef $$ReminderRecordsTableCreateCompanionBuilder =
@@ -3444,6 +4808,8 @@ typedef $$ReminderRecordsTableCreateCompanionBuilder =
       required String body,
       required int hour,
       required int minute,
+      Value<String> repeatDays,
+      Value<String?> targetDhikrId,
       Value<bool> enabled,
       required DateTime createdAt,
       required DateTime updatedAt,
@@ -3459,6 +4825,8 @@ typedef $$ReminderRecordsTableUpdateCompanionBuilder =
       Value<String> body,
       Value<int> hour,
       Value<int> minute,
+      Value<String> repeatDays,
+      Value<String?> targetDhikrId,
       Value<bool> enabled,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -3499,6 +4867,16 @@ class $$ReminderRecordsTableFilterComposer
 
   ColumnFilters<int> get minute => $composableBuilder(
     column: $table.minute,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatDays => $composableBuilder(
+    column: $table.repeatDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetDhikrId => $composableBuilder(
+    column: $table.targetDhikrId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3567,6 +4945,16 @@ class $$ReminderRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get repeatDays => $composableBuilder(
+    column: $table.repeatDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetDhikrId => $composableBuilder(
+    column: $table.targetDhikrId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get enabled => $composableBuilder(
     column: $table.enabled,
     builder: (column) => ColumnOrderings(column),
@@ -3621,6 +5009,16 @@ class $$ReminderRecordsTableAnnotationComposer
 
   GeneratedColumn<int> get minute =>
       $composableBuilder(column: $table.minute, builder: (column) => column);
+
+  GeneratedColumn<String> get repeatDays => $composableBuilder(
+    column: $table.repeatDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get targetDhikrId => $composableBuilder(
+    column: $table.targetDhikrId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
@@ -3685,6 +5083,8 @@ class $$ReminderRecordsTableTableManager
                 Value<String> body = const Value.absent(),
                 Value<int> hour = const Value.absent(),
                 Value<int> minute = const Value.absent(),
+                Value<String> repeatDays = const Value.absent(),
+                Value<String?> targetDhikrId = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -3698,6 +5098,8 @@ class $$ReminderRecordsTableTableManager
                 body: body,
                 hour: hour,
                 minute: minute,
+                repeatDays: repeatDays,
+                targetDhikrId: targetDhikrId,
                 enabled: enabled,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -3713,6 +5115,8 @@ class $$ReminderRecordsTableTableManager
                 required String body,
                 required int hour,
                 required int minute,
+                Value<String> repeatDays = const Value.absent(),
+                Value<String?> targetDhikrId = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
@@ -3726,6 +5130,8 @@ class $$ReminderRecordsTableTableManager
                 body: body,
                 hour: hour,
                 minute: minute,
+                repeatDays: repeatDays,
+                targetDhikrId: targetDhikrId,
                 enabled: enabled,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -4078,8 +5484,10 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$DhikrRecordsTableTableManager get dhikrRecords =>
       $$DhikrRecordsTableTableManager(_db, _db.dhikrRecords);
-  $$CounterEventsTableTableManager get counterEvents =>
-      $$CounterEventsTableTableManager(_db, _db.counterEvents);
+  $$CounterStatBucketsTableTableManager get counterStatBuckets =>
+      $$CounterStatBucketsTableTableManager(_db, _db.counterStatBuckets);
+  $$CounterSessionsTableTableManager get counterSessions =>
+      $$CounterSessionsTableTableManager(_db, _db.counterSessions);
   $$ReminderRecordsTableTableManager get reminderRecords =>
       $$ReminderRecordsTableTableManager(_db, _db.reminderRecords);
   $$VirdProgressRecordsTableTableManager get virdProgressRecords =>

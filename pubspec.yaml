@@ -44,6 +44,11 @@ dependencies:
   uuid: ^4.5.3
   intl: ^0.20.2
   timezone: ^0.11.0
+  esmaulhusna_muslimbg: ^1.0.9
+  audioplayers: ^6.6.0
+  firebase_core: ^4.7.0
+  firebase_analytics: ^12.3.0
+  firebase_messaging: ^16.2.0
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +82,7 @@ flutter:
     - assets/images/home_mosque.webp
     - assets/images/home_book.png
     - assets/images/esma-her2.webp
+    - assets/images/hatirlaticilar-hero.webp
     - assets/images/namaztesbihatihero.webp
     - assets/images/zikir-hero.webp
     - assets/images/istatistikler-hero.webp
@@ -89,6 +95,8 @@ flutter:
     - assets/images/today_esma_card_background.png
     - assets/images/menu_bottom_motif.webp
     - assets/images/hand_prayer_beads_icon.svg
+    - assets/audio/esma/allah.mp3
+    - assets/audio/esma/LICENSE-MohammedAbidNafi-99-Names-of-Allah.txt
 
   fonts:
     - family: Inter
@@ -100,6 +108,11 @@ flutter:
           weight: 500
         - asset: assets/fonts/EBGaramond-Italic-Variable.ttf
           weight: 500
+          style: italic
+    - family: Crimson Pro
+      fonts:
+        - asset: assets/fonts/CrimsonPro-Italic-Variable.ttf
+          weight: 800
           style: italic
     - family: Amiri
       fonts:

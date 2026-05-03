@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/config/app_environment_provider.dart';
-import '../../../core/config/store_channel.dart';
-import '../../../core/monetization/monetization.dart';
 import '../../../shared/layout/proportional_layout.dart';
 import '../../../shared/widgets/app_menu_drawer.dart';
 import '../application/settings_controller.dart';
@@ -21,9 +18,6 @@ const _secondaryText = Color(0xFF69766E);
 const _gold = Color(0xFFD4BA75);
 const _dividerColor = Color(0xFFDDE4D9);
 
-const _logoAsset = 'assets/images/splash_logo_icon.png';
-const _motifAsset = 'assets/images/menu_bottom_motif.webp';
-
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -31,8 +25,6 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsControllerProvider);
     final controller = ref.read(settingsControllerProvider.notifier);
-    final env = ref.watch(appEnvironmentProvider);
-    final entitlement = ref.watch(entitlementProvider);
     final media = MediaQuery.of(context);
     final screenWidth = media.size.width;
     final scale = proportionalLayoutScaleFor(screenWidth);
@@ -79,17 +71,11 @@ class SettingsScreen extends ConsumerWidget {
                           SizedBox(height: 12 * scale),
                           _SettingsSection(
                             scale: scale,
-                            icon: Icons.palette_rounded,
+                            icon: Icons.text_fields_rounded,
                             title: 'Görünüm',
                             description:
-                                'Tema ve okuma yoğunluğunu kullanım alışkanlığına göre ayarla.',
+                                'Okuma yoğunluğunu kullanım alışkanlığına göre ayarla.',
                             children: [
-                              _ThemeModePicker(
-                                scale: scale,
-                                value: settings.themeMode,
-                                onChanged: controller.setThemeMode,
-                              ),
-                              SizedBox(height: 10 * scale),
                               _PreferenceSwitchTile(
                                 scale: scale,
                                 icon: Icons.format_size_rounded,
@@ -153,44 +139,12 @@ class SettingsScreen extends ConsumerWidget {
                             ],
                           ),
                           SizedBox(height: 12 * scale),
-                          _SettingsSection(
-                            scale: scale,
-                            icon: Icons.verified_user_rounded,
-                            title: 'Uygulama',
-                            description:
-                                'Dağıtım kanalı ve premium hazırlık durumunu görüntüle.',
-                            children: [
-                              _InfoRow(
-                                scale: scale,
-                                icon: Icons.storefront_rounded,
-                                title: 'Store kanalı',
-                                value: _storeChannelLabel(env.storeChannel),
-                              ),
-                              SizedBox(height: 8 * scale),
-                              _InfoRow(
-                                scale: scale,
-                                icon: Icons.workspace_premium_rounded,
-                                title: 'Premium durumu',
-                                value: entitlement.hasPremium
-                                    ? 'Aktif'
-                                    : 'Hazırlıkta',
-                              ),
-                              SizedBox(height: 8 * scale),
-                              _InfoRow(
-                                scale: scale,
-                                icon: Icons.payments_rounded,
-                                title: 'Monetization modu',
-                                value: _monetizationLabel(entitlement.mode),
-                              ),
-                              SizedBox(height: 12 * scale),
-                              _PremiumNote(scale: scale),
-                            ],
-                          ),
-                          SizedBox(height: 12 * scale),
                           _ResetPreferencesCard(
                             scale: scale,
                             onReset: controller.resetExperienceSettings,
                           ),
+                          SizedBox(height: 12 * scale),
+                          _ContactCard(scale: scale),
                         ],
                       ),
                     ),
@@ -282,36 +236,14 @@ class _SettingsHero extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            right: -44 * scale,
-            top: -12 * scale,
-            width: 255 * scale,
-            height: 180 * scale,
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: 0.32,
-                child: Image.asset(
-                  _motifAsset,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.bottomRight,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
             left: 20 * scale,
             top: topInset + 4 * scale,
             child: _HeroMenuButton(scale: scale),
           ),
           Positioned(
-            right: 22 * scale,
-            top: topInset + 26 * scale,
-            child: _SettingsLogoSeal(scale: scale),
-          ),
-          Positioned(
             left: 64 * scale,
             top: topInset + 10 * scale,
-            right: 104 * scale,
+            right: 20 * scale,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -330,7 +262,7 @@ class _SettingsHero extends StatelessWidget {
                 ),
                 SizedBox(height: 6 * scale),
                 Text(
-                  'Deneyimi sadeleştir, görünümü seç, geri bildirimi incelt.',
+                  'Deneyimi sadeleştir, okuma ayarlarını ve geri bildirimi incelt.',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -380,6 +312,7 @@ class _HeroMenuButton extends StatelessWidget {
           ],
         ),
         child: IconButton(
+          enableFeedback: false,
           tooltip: 'Menü',
           onPressed: () => openAppMenu(context),
           icon: Icon(
@@ -387,54 +320,6 @@ class _HeroMenuButton extends StatelessWidget {
             color: _primaryGreen,
             size: 20 * scale,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsLogoSeal extends StatelessWidget {
-  const _SettingsLogoSeal({required this.scale});
-
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = 68 * scale;
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2D7350), Color(0xFF103E2A)],
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.72),
-          width: 1 * scale,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _primaryGreen.withValues(alpha: 0.16),
-            blurRadius: 20 * scale,
-            offset: Offset(0, 9 * scale),
-          ),
-          BoxShadow(
-            color: _gold.withValues(alpha: 0.13),
-            blurRadius: 16 * scale,
-            offset: Offset(0, 4 * scale),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(13 * scale),
-        child: Image.asset(
-          _logoAsset,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
         ),
       ),
     );
@@ -481,7 +366,7 @@ class _HeroCallout extends StatelessWidget {
           SizedBox(width: 10 * scale),
           Expanded(
             child: Text(
-              'Yeni görünüm, tema seçimi ve tek dokunuşla sessiz kullanım hazır.',
+              'Okuma konforu ve tek dokunuşla sessiz kullanım hazır.',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -515,15 +400,6 @@ class _SettingsSummaryStrip extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 18 * scale),
       child: Row(
         children: [
-          Expanded(
-            child: _SummaryCard(
-              scale: scale,
-              icon: _themeModeIcon(settings.themeMode),
-              title: 'Tema',
-              value: _themeModeLabel(settings.themeMode),
-            ),
-          ),
-          SizedBox(width: 8 * scale),
           Expanded(
             child: _SummaryCard(
               scale: scale,
@@ -726,120 +602,6 @@ class _SectionIcon extends StatelessWidget {
   }
 }
 
-class _ThemeModePicker extends StatelessWidget {
-  const _ThemeModePicker({
-    required this.scale,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final double scale;
-  final AppThemeMode value;
-  final ValueChanged<AppThemeMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(4 * scale),
-      decoration: BoxDecoration(
-        color: _primaryGreen.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(18 * scale),
-        border: Border.all(
-          color: _dividerColor.withValues(alpha: 0.82),
-          width: 0.8 * scale,
-        ),
-      ),
-      child: Row(
-        children: AppThemeMode.values.map((mode) {
-          return Expanded(
-            child: _ThemeModePill(
-              scale: scale,
-              mode: mode,
-              selected: mode == value,
-              onTap: () => onChanged(mode),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _ThemeModePill extends StatelessWidget {
-  const _ThemeModePill({
-    required this.scale,
-    required this.mode,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final double scale;
-  final AppThemeMode mode;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(15 * scale);
-    final foreground = selected ? Colors.white : _primaryText;
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          curve: Curves.easeOutCubic,
-          height: 42 * scale,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            gradient: selected
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF347756), Color(0xFF13472F)],
-                  )
-                : null,
-            color: selected ? null : Colors.transparent,
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: _primaryGreen.withValues(alpha: 0.15),
-                      blurRadius: 14 * scale,
-                      offset: Offset(0, 6 * scale),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(_themeModeIcon(mode), color: foreground, size: 15 * scale),
-              SizedBox(width: 5 * scale),
-              Flexible(
-                child: Text(
-                  _themeModeLabel(mode),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 11.4 * scale,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                    height: 1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PreferenceSwitchTile extends StatelessWidget {
   const _PreferenceSwitchTile({
     required this.scale,
@@ -957,128 +719,6 @@ class _PreferenceSwitchTile extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.scale,
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
-
-  final double scale;
-  final IconData icon;
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        11 * scale,
-        10 * scale,
-        11 * scale,
-        10 * scale,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.48),
-        borderRadius: BorderRadius.circular(18 * scale),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.74),
-          width: 0.8 * scale,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34 * scale,
-            height: 34 * scale,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _primaryGreen.withValues(alpha: 0.08),
-            ),
-            child: Icon(icon, color: _primaryGreen, size: 18 * scale),
-          ),
-          SizedBox(width: 11 * scale),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 13 * scale,
-                fontWeight: FontWeight.w900,
-                height: 1.1,
-              ),
-            ),
-          ),
-          SizedBox(width: 10 * scale),
-          Flexible(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: _buttonGreen,
-                fontSize: 12.2 * scale,
-                fontWeight: FontWeight.w900,
-                height: 1.1,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PremiumNote extends StatelessWidget {
-  const _PremiumNote({required this.scale});
-
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(13 * scale),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _gold.withValues(alpha: 0.16),
-            _buttonGreen.withValues(alpha: 0.08),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18 * scale),
-        border: Border.all(
-          color: _gold.withValues(alpha: 0.32),
-          width: 0.8 * scale,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.auto_awesome_rounded, color: _gold, size: 19 * scale),
-          SizedBox(width: 10 * scale),
-          Expanded(
-            child: Text(
-              'İlk sürümde premium görünmez/no-op. Sonraki fazda store IAP adaptörleri açılacak.',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 11.2 * scale,
-                fontWeight: FontWeight.w700,
-                height: 1.34,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ResetPreferencesCard extends StatelessWidget {
   const _ResetPreferencesCard({required this.scale, required this.onReset});
 
@@ -1121,7 +761,7 @@ class _ResetPreferencesCard extends StatelessWidget {
                 ),
                 SizedBox(height: 5 * scale),
                 Text(
-                  'Tema, okuma ve geri bildirim ayarlarını varsayılana döndürür.',
+                  'Okuma ve geri bildirim ayarlarını varsayılana döndürür.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -1152,6 +792,207 @@ class _ResetPreferencesCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ContactCard extends StatelessWidget {
+  const _ContactCard({required this.scale});
+
+  final double scale;
+
+  static const _email = 'info@zikirmatik.pro';
+  static const _website = 'www.zikirmatik.pro';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
+      padding: EdgeInsets.fromLTRB(
+        15 * scale,
+        14 * scale,
+        15 * scale,
+        15 * scale,
+      ),
+      decoration: BoxDecoration(
+        color: _cardBackground.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(24 * scale),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.68),
+          width: 0.8 * scale,
+        ),
+        boxShadow: _softShadow(scale),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              _SectionIcon(scale: scale, icon: Icons.contact_support_rounded),
+              SizedBox(width: 11 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'İletişim',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 14.8 * scale,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
+                    ),
+                    SizedBox(height: 5 * scale),
+                    Text(
+                      'Destek ve geri bildirim için bize ulaş.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _secondaryText,
+                        fontSize: 10.8 * scale,
+                        fontWeight: FontWeight.w600,
+                        height: 1.28,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12 * scale),
+          _ContactRow(
+            scale: scale,
+            icon: Icons.mail_outline_rounded,
+            label: 'E-posta',
+            value: _email,
+            onTap: () => _copyValue(context, 'E-posta', _email),
+          ),
+          SizedBox(height: 8 * scale),
+          _ContactRow(
+            scale: scale,
+            icon: Icons.language_rounded,
+            label: 'Web sitesi',
+            value: _website,
+            onTap: () => _copyValue(context, 'Web sitesi', _website),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copyValue(
+    BuildContext context,
+    String label,
+    String value,
+  ) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$label kopyalandı'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1300),
+        ),
+      );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.scale,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final double scale;
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(17 * scale);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Ink(
+          padding: EdgeInsets.fromLTRB(
+            11 * scale,
+            9 * scale,
+            10 * scale,
+            9 * scale,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.48),
+            borderRadius: radius,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.78)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34 * scale,
+                height: 34 * scale,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _buttonGreen.withValues(alpha: 0.10),
+                ),
+                child: Icon(icon, color: _primaryGreen, size: 18 * scale),
+              ),
+              SizedBox(width: 11 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _secondaryText,
+                        fontSize: 10.2 * scale,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                    SizedBox(height: 5 * scale),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 12.8 * scale,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8 * scale),
+              Icon(
+                Icons.copy_rounded,
+                color: _buttonGreen.withValues(alpha: 0.78),
+                size: 17 * scale,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1188,37 +1029,4 @@ List<BoxShadow> _softShadow(double scale) {
       offset: Offset(0, 8 * scale),
     ),
   ];
-}
-
-String _themeModeLabel(AppThemeMode mode) {
-  return switch (mode) {
-    AppThemeMode.system => 'Sistem',
-    AppThemeMode.light => 'Açık',
-    AppThemeMode.dark => 'Koyu',
-  };
-}
-
-IconData _themeModeIcon(AppThemeMode mode) {
-  return switch (mode) {
-    AppThemeMode.system => Icons.brightness_auto_rounded,
-    AppThemeMode.light => Icons.light_mode_rounded,
-    AppThemeMode.dark => Icons.dark_mode_rounded,
-  };
-}
-
-String _storeChannelLabel(StoreChannel channel) {
-  return switch (channel) {
-    StoreChannel.googlePlay => 'Google Play',
-    StoreChannel.huaweiAppGallery => 'Huawei AppGallery',
-    StoreChannel.appStore => 'App Store',
-    StoreChannel.development => 'Geliştirme',
-  };
-}
-
-String _monetizationLabel(MonetizationMode mode) {
-  return switch (mode) {
-    MonetizationMode.freeLaunch => 'Ücretsiz lansman',
-    MonetizationMode.adSupported => 'Reklam destekli',
-    MonetizationMode.premiumGated => 'Premium kilitli',
-  };
 }

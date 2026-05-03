@@ -13,7 +13,7 @@ import '../../features/reminders/presentation/reminders_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/statistics/presentation/statistics_screen.dart';
-import '../../features/vird/presentation/vird_screen.dart';
+import '../../shared/widgets/analytics_screen_view.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/ios_edge_back_gesture.dart';
 
@@ -34,7 +34,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AppRouteNames.dashboard,
         pageBuilder: (context, state) => NoTransitionPage<void>(
           key: state.pageKey,
-          child: const DashboardScreen(),
+          child: _screenView(AppRouteNames.dashboard, const DashboardScreen()),
         ),
       ),
       GoRoute(
@@ -45,8 +45,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/zikirler',
         name: AppRouteNames.dhikrLibrary,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const DhikrLibraryScreen()),
+        pageBuilder: (context, state) => _platformPage(
+          context,
+          state,
+          _screenView(AppRouteNames.dhikrLibrary, const DhikrLibraryScreen()),
+        ),
       ),
       GoRoute(
         path: '/zikirler/:dhikrId',
@@ -54,27 +57,41 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _platformPage(
           context,
           state,
-          DhikrDetailScreen(dhikrId: state.pathParameters['dhikrId'] ?? ''),
+          _screenView(
+            AppRouteNames.dhikrDetail,
+            DhikrDetailScreen(dhikrId: state.pathParameters['dhikrId'] ?? ''),
+          ),
           addIosEdgeBackGesture: true,
         ),
       ),
       GoRoute(
         path: '/esma',
         name: AppRouteNames.esma,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const EsmaScreen()),
+        pageBuilder: (context, state) {
+          final initialNumber = int.tryParse(
+            state.uri.queryParameters['number'] ?? '',
+          );
+          return _platformPage(
+            context,
+            state,
+            _screenView(
+              AppRouteNames.esma,
+              EsmaScreen(initialExpandedNumber: initialNumber),
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/namaz-tesbihati',
         name: AppRouteNames.namazTesbihati,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const NamazTesbihatiScreen()),
-      ),
-      GoRoute(
-        path: '/vird',
-        name: AppRouteNames.vird,
-        pageBuilder: (context, state) =>
-            _platformPage(context, state, const VirdScreen()),
+        pageBuilder: (context, state) => _platformPage(
+          context,
+          state,
+          _screenView(
+            AppRouteNames.namazTesbihati,
+            const NamazTesbihatiScreen(),
+          ),
+        ),
       ),
       GoRoute(
         path: '/hatirlaticilar',
@@ -82,7 +99,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _platformPage(
           context,
           state,
-          const RemindersScreen(),
+          _screenView(AppRouteNames.reminders, const RemindersScreen()),
           addIosEdgeBackGesture: true,
         ),
       ),
@@ -92,7 +109,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _platformPage(
           context,
           state,
-          const StatisticsScreen(),
+          _screenView(AppRouteNames.statistics, const StatisticsScreen()),
           addIosEdgeBackGesture: true,
         ),
       ),
@@ -102,7 +119,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => _platformPage(
           context,
           state,
-          const SettingsScreen(),
+          _screenView(AppRouteNames.settings, const SettingsScreen()),
           addIosEdgeBackGesture: true,
         ),
       ),
@@ -125,9 +142,9 @@ Page<void> _counterPage(GoRouterState state) {
     key: state.pageKey,
     transitionDuration: const Duration(milliseconds: 480),
     reverseTransitionDuration: const Duration(milliseconds: 360),
-    child: const IosEdgeBackGesture(
+    child: IosEdgeBackGesture(
       enableOnAllPlatforms: true,
-      child: ZikrCounterScreen(),
+      child: _screenView(AppRouteNames.counter, const ZikrCounterScreen()),
     ),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
@@ -145,6 +162,10 @@ Page<void> _counterPage(GoRouterState state) {
       );
     },
   );
+}
+
+Widget _screenView(String screenName, Widget child) {
+  return AnalyticsScreenView(screenName: screenName, child: child);
 }
 
 Page<void> _platformPage(
@@ -177,7 +198,6 @@ class AppRouteNames {
   static const dhikrDetail = 'dhikrDetail';
   static const esma = 'esma';
   static const namazTesbihati = 'namazTesbihati';
-  static const vird = 'vird';
   static const reminders = 'reminders';
   static const statistics = 'statistics';
   static const settings = 'settings';
@@ -193,7 +213,6 @@ class AppRoutes {
   static String dhikrDetail(String dhikrId) => '/zikirler/$dhikrId';
   static const esma = '/esma';
   static const namazTesbihati = '/namaz-tesbihati';
-  static const vird = '/vird';
   static const reminders = '/hatirlaticilar';
   static const statistics = '/istatistikler';
   static const settings = '/ayarlar';
