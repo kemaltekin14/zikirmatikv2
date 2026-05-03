@@ -31,7 +31,7 @@ const _bottomNavBaseHeight = 76.0;
 const _bottomNavBaseGap = 10.0;
 const _bottomNavMaxSafeInset = 4.0;
 const _scrollExtraBottomSpacing = 42.0;
-const _esmaCompactCardHeight = 174.0;
+const _esmaCompactCardHeight = 198.0;
 const _esmaExpandedCardHeight = 366.0;
 const _esmaCardMotionDuration = Duration(milliseconds: 560);
 const _esmaCardRevealDuration = Duration(milliseconds: 460);
@@ -1424,7 +1424,7 @@ class _CompactEsmaCardContent extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: _primaryGreen,
-                    fontSize: 13.8 * scale,
+                    fontSize: 15.4 * scale,
                     fontWeight: FontWeight.w900,
                     height: 1.05,
                   ),
@@ -1435,13 +1435,13 @@ class _CompactEsmaCardContent extends StatelessWidget {
                     alignment: Alignment.topLeft,
                     child: Text(
                       item.meaning,
-                      maxLines: 2,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _mutedText,
-                        fontSize: 10.7 * scale,
+                        fontSize: 12.1 * scale,
                         fontWeight: FontWeight.w600,
-                        height: 1.14,
+                        height: 1.12,
                       ),
                     ),
                   ),
@@ -1453,7 +1453,7 @@ class _CompactEsmaCardContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Flexible(
-                        flex: 5,
+                        flex: 6,
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: _CategoryPill(item: item, scale: scale),
@@ -1461,7 +1461,7 @@ class _CompactEsmaCardContent extends StatelessWidget {
                       ),
                       SizedBox(width: 5 * scale),
                       Flexible(
-                        flex: 4,
+                        flex: 3,
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: Padding(
@@ -1595,9 +1595,9 @@ class _ExpandedEsmaCardContent extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _primaryGreen.withValues(alpha: 0.86),
-                            fontSize: 13.2 * scale,
+                            fontSize: 14.8 * scale,
                             fontWeight: FontWeight.w700,
-                            height: 1.22,
+                            height: 1.18,
                           ),
                         ),
                         SizedBox(height: 11 * scale),
@@ -1617,30 +1617,30 @@ class _ExpandedEsmaCardContent extends StatelessWidget {
                         SizedBox(height: 10 * scale),
                         Text(
                           _expandedExplanationCopy(item),
-                          maxLines: 5,
+                          maxLines: 7,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _mutedText.withValues(alpha: 0.92),
-                            fontSize: 10.6 * scale,
+                            fontSize: 12.4 * scale,
                             fontWeight: FontWeight.w600,
-                            height: 1.24,
+                            height: 1.2,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(width: 10 * scale),
+                  SizedBox(width: 6 * scale),
                   Transform.translate(
                     offset: Offset(0, -12 * scale),
                     child: _ExpandedEsmaArabicSeal(
                       item: item,
                       scale: scale,
-                      size: 130 * scale,
+                      size: 124 * scale,
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: 16 * scale),
+              const Spacer(),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -2086,8 +2086,8 @@ class _CategoryPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: (prominent ? 23 : 18.5) * scale,
-      padding: EdgeInsets.symmetric(horizontal: (prominent ? 10 : 8) * scale),
+      height: (prominent ? 23 : 22) * scale,
+      padding: EdgeInsets.symmetric(horizontal: (prominent ? 10 : 9.5) * scale),
       decoration: BoxDecoration(
         color: prominent
             ? _softGold.withValues(alpha: 0.22)
@@ -2103,14 +2103,14 @@ class _CategoryPill extends StatelessWidget {
           Icon(
             _iconFor(item.categoryIcon),
             color: _primaryGreen,
-            size: (prominent ? 12.5 : 10.5) * scale,
+            size: (prominent ? 12.5 : 12.2) * scale,
           ),
-          SizedBox(width: 4 * scale),
+          SizedBox(width: (prominent ? 4 : 4.5) * scale),
           Text(
             item.category,
             style: TextStyle(
               color: _primaryGreen,
-              fontSize: (prominent ? 10.6 : 9.2) * scale,
+              fontSize: (prominent ? 10.6 : 10.8) * scale,
               fontWeight: FontWeight.w800,
               height: 1,
             ),

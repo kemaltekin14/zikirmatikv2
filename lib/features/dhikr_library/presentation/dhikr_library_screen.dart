@@ -1640,7 +1640,7 @@ class _DhikrLibraryCard extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _primaryText,
-                            fontSize: 15.8 * scale,
+                            fontSize: 16.8 * scale,
                             fontWeight: FontWeight.w800,
                             height: 1.12,
                             letterSpacing: 0,
@@ -1654,7 +1654,7 @@ class _DhikrLibraryCard extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: _libraryCardBodyText,
-                              fontSize: 11.4 * scale,
+                              fontSize: 12.4 * scale,
                               fontWeight: FontWeight.w600,
                               height: 1.28,
                             ),

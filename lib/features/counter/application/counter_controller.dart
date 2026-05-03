@@ -216,7 +216,7 @@ class CounterController extends Notifier<CounterState> {
   }
 
   void reset() {
-    final previousSessionId = state.sessionId;
+    final previousState = state;
     state = state.copyWith(
       sessionId: _newSessionId(),
       count: 0,
@@ -224,9 +224,13 @@ class CounterController extends Notifier<CounterState> {
     );
     _changedBeforeRestore = true;
     unawaited(_persistActiveSession());
-    unawaited(
-      ref.read(appDatabaseProvider).markCounterSessionReset(previousSessionId),
-    );
+    if (previousState.count <= 0) {
+      unawaited(
+        ref
+            .read(appDatabaseProvider)
+            .markCounterSessionReset(previousState.sessionId),
+      );
+    }
   }
 
   void dismissCompletion() {

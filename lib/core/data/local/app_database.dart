@@ -487,11 +487,25 @@ class AppDatabase extends _$AppDatabase {
     required DateTime? completedAt,
     required DateTime now,
   }) async {
-    if (count <= 0) return;
-
     final existing = await (select(
       counterSessions,
     )..where((table) => table.id.equals(id))).getSingleOrNull();
+
+    if (count <= 0) {
+      if (existing == null) return;
+      await (update(
+        counterSessions,
+      )..where((table) => table.id.equals(id))).write(
+        CounterSessionsCompanion(
+          count: const Value(0),
+          status: const Value(_counterSessionStatusReset),
+          completedAt: const Value(null),
+          updatedAt: Value(now),
+          syncStatus: const Value('pendingUpload'),
+        ),
+      );
+      return;
+    }
 
     if (existing == null) {
       await into(counterSessions).insert(

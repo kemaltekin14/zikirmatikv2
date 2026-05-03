@@ -847,6 +847,24 @@ class _ZikrTitleSection extends StatelessWidget {
     final gapScale = (screenWidth / appLayoutBaselineWidth)
         .clamp(0.9, 1.04)
         .toDouble();
+    final latinFitsThreeLines = !_latinTitleExceedsLines(
+      context: context,
+      text: name,
+      width: titleWidth,
+      fontSize: latinFontSize,
+      maxLines: 3,
+    );
+    final latinTitleMaxLines = latinFitsThreeLines ? 3 : 4;
+    final compactLatinTitle = !latinFitsThreeLines;
+    final fittedLatinFontSize = _fittedLatinTitleFontSize(
+      context: context,
+      text: name,
+      width: titleWidth,
+      baseFontSize: latinFontSize,
+      maxLines: latinTitleMaxLines,
+    );
+    final titleGapScale = compactLatinTitle ? gapScale * 0.72 : gapScale;
+    final latinTitleLineHeight = compactLatinTitle ? 0.94 : 1.0;
 
     return Center(
       child: SizedBox(
@@ -865,19 +883,21 @@ class _ZikrTitleSection extends StatelessWidget {
                     text: displayArabic,
                     fontSize: arabicFontSize,
                   ),
-                SizedBox(height: 4 * gapScale),
+                SizedBox(height: 4 * titleGapScale),
                 _PremiumShimmerText(
                   name,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: latinTitleMaxLines,
+                  overflow: compactLatinTitle
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _latinTitleColor,
                     fontFamily: 'Crimson Pro',
-                    fontSize: latinFontSize,
+                    fontSize: fittedLatinFontSize,
                     fontStyle: FontStyle.italic,
                     fontWeight: FontWeight.w800,
-                    height: 1.0,
+                    height: latinTitleLineHeight,
                     shadows: [
                       Shadow(
                         color: _deepGreen.withValues(alpha: 0.14),
@@ -887,9 +907,9 @@ class _ZikrTitleSection extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(height: 5 * gapScale),
+                SizedBox(height: 5 * titleGapScale),
                 _TitleDivider(scale: scale),
-                SizedBox(height: 6 * gapScale),
+                SizedBox(height: 6 * titleGapScale),
                 Text(
                   displayMeaning == null || displayMeaning.isEmpty
                       ? ''
@@ -909,6 +929,60 @@ class _ZikrTitleSection extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  bool _latinTitleExceedsLines({
+    required BuildContext context,
+    required String text,
+    required double width,
+    required double fontSize,
+    required int maxLines,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: _latinMeasureStyle(fontSize, 1.0)),
+      maxLines: maxLines,
+      textAlign: TextAlign.center,
+      textDirection: Directionality.of(context),
+    )..layout(maxWidth: width);
+
+    return painter.didExceedMaxLines;
+  }
+
+  double _fittedLatinTitleFontSize({
+    required BuildContext context,
+    required String text,
+    required double width,
+    required double baseFontSize,
+    required int maxLines,
+  }) {
+    final textDirection = Directionality.of(context);
+    final lineHeight = maxLines > 3 ? 0.94 : 1.0;
+    var fontSize = baseFontSize;
+    while (fontSize > 22.0) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: _latinMeasureStyle(fontSize, lineHeight),
+        ),
+        maxLines: maxLines,
+        textAlign: TextAlign.center,
+        textDirection: textDirection,
+      )..layout(maxWidth: width);
+      if (!painter.didExceedMaxLines) return fontSize;
+      fontSize -= 0.5;
+    }
+
+    return fontSize;
+  }
+
+  TextStyle _latinMeasureStyle(double fontSize, double height) {
+    return TextStyle(
+      fontFamily: 'Crimson Pro',
+      fontSize: fontSize,
+      fontStyle: FontStyle.italic,
+      fontWeight: FontWeight.w800,
+      height: height,
     );
   }
 
@@ -1179,63 +1253,70 @@ class _PremiumShimmerTextState extends State<_PremiumShimmerText>
                   ),
               ],
             );
+            final shimmerTextPadding = EdgeInsets.symmetric(
+              vertical: 3 * scale,
+            );
 
             return Stack(
               alignment: Alignment.center,
+              clipBehavior: Clip.none,
               children: [
-                Text(
-                  widget.text,
-                  maxLines: widget.maxLines,
-                  overflow: widget.overflow,
-                  textAlign: widget.textAlign,
-                  style: glowStyle,
+                Padding(
+                  padding: shimmerTextPadding,
+                  child: Text(
+                    widget.text,
+                    maxLines: widget.maxLines,
+                    overflow: widget.overflow,
+                    textAlign: widget.textAlign,
+                    style: glowStyle,
+                  ),
                 ),
                 if (_sweepActive)
                   ShaderMask(
                     blendMode: BlendMode.srcIn,
                     shaderCallback: (bounds) {
                       final sweep = -1.06 + shimmerProgress * 2.12;
-                      final softGold = Color.lerp(
-                        baseColor,
-                        _latinTitleGlowColor,
-                        0.34,
-                      )!;
+                      const deepShimmerGold = Color(0xFFC58E27);
+                      const brightShimmerGold = Color(0xFFFFD978);
 
                       return LinearGradient(
-                        begin: Alignment(sweep - 1.08, -0.35),
-                        end: Alignment(sweep + 1.08, 0.35),
+                        begin: Alignment(sweep - 1.02, 0),
+                        end: Alignment(sweep + 1.02, 0),
                         colors: [
-                          baseColor,
-                          baseColor,
-                          softGold,
+                          baseColor.withValues(alpha: 0),
+                          baseColor.withValues(alpha: 0),
+                          deepShimmerGold.withValues(alpha: 0.70),
                           _latinTitleGlowColor,
-                          const Color(0xFFFFF0BC),
+                          brightShimmerGold,
                           _latinTitleGlowColor,
-                          softGold,
-                          baseColor,
-                          baseColor,
+                          deepShimmerGold.withValues(alpha: 0.62),
+                          baseColor.withValues(alpha: 0),
+                          baseColor.withValues(alpha: 0),
                         ],
                         stops: const [
                           0.00,
-                          0.28,
-                          0.40,
+                          0.24,
+                          0.38,
                           0.48,
                           0.52,
                           0.56,
-                          0.64,
+                          0.66,
                           0.76,
                           1.00,
                         ],
                       ).createShader(bounds);
                     },
-                    child: Text(
-                      widget.text,
-                      maxLines: widget.maxLines,
-                      overflow: widget.overflow,
-                      textAlign: widget.textAlign,
-                      style: widget.style.copyWith(
-                        color: Colors.white,
-                        shadows: null,
+                    child: Padding(
+                      padding: shimmerTextPadding,
+                      child: Text(
+                        widget.text,
+                        maxLines: widget.maxLines,
+                        overflow: widget.overflow,
+                        textAlign: widget.textAlign,
+                        style: widget.style.copyWith(
+                          color: Colors.white,
+                          shadows: null,
+                        ),
                       ),
                     ),
                   ),

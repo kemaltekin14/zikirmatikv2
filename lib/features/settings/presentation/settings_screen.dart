@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/layout/proportional_layout.dart';
 import '../../../shared/widgets/app_menu_drawer.dart';
@@ -137,11 +138,6 @@ class SettingsScreen extends ConsumerWidget {
                                 onChanged: controller.setQuietFeedbackMode,
                               ),
                             ],
-                          ),
-                          SizedBox(height: 12 * scale),
-                          _ResetPreferencesCard(
-                            scale: scale,
-                            onReset: controller.resetExperienceSettings,
                           ),
                           SizedBox(height: 12 * scale),
                           _ContactCard(scale: scale),
@@ -719,84 +715,6 @@ class _PreferenceSwitchTile extends StatelessWidget {
   }
 }
 
-class _ResetPreferencesCard extends StatelessWidget {
-  const _ResetPreferencesCard({required this.scale, required this.onReset});
-
-  final double scale;
-  final VoidCallback onReset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 18 * scale),
-      padding: EdgeInsets.fromLTRB(
-        15 * scale,
-        14 * scale,
-        15 * scale,
-        15 * scale,
-      ),
-      decoration: BoxDecoration(
-        color: _cardBackground.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(24 * scale),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.68),
-          width: 0.8 * scale,
-        ),
-        boxShadow: _softShadow(scale),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tercihleri yenile',
-                  style: TextStyle(
-                    color: _primaryText,
-                    fontSize: 14.8 * scale,
-                    fontWeight: FontWeight.w900,
-                    height: 1.1,
-                  ),
-                ),
-                SizedBox(height: 5 * scale),
-                Text(
-                  'Okuma ve geri bildirim ayarlarını varsayılana döndürür.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _secondaryText,
-                    fontSize: 10.8 * scale,
-                    fontWeight: FontWeight.w600,
-                    height: 1.28,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: 12 * scale),
-          OutlinedButton.icon(
-            onPressed: onReset,
-            icon: Icon(Icons.refresh_rounded, size: 17 * scale),
-            label: const Text('Sıfırla'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _primaryGreen,
-              side: BorderSide(color: _buttonGreen.withValues(alpha: 0.34)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16 * scale),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: 12 * scale,
-                vertical: 10 * scale,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ContactCard extends StatelessWidget {
   const _ContactCard({required this.scale});
 
@@ -804,6 +722,7 @@ class _ContactCard extends StatelessWidget {
 
   static const _email = 'info@zikirmatik.pro';
   static const _website = 'www.zikirmatik.pro';
+  static const _privacyUrl = 'https://zikirmatik.pro/privacy.html';
 
   @override
   Widget build(BuildContext context) {
@@ -879,6 +798,15 @@ class _ContactCard extends StatelessWidget {
             value: _website,
             onTap: () => _copyValue(context, 'Web sitesi', _website),
           ),
+          SizedBox(height: 8 * scale),
+          _ContactRow(
+            scale: scale,
+            icon: Icons.privacy_tip_outlined,
+            label: 'Privacy',
+            value: _privacyUrl,
+            trailingIcon: Icons.open_in_new_rounded,
+            onTap: () => _openPrivacyPolicy(context),
+          ),
         ],
       ),
     );
@@ -902,6 +830,29 @@ class _ContactCard extends StatelessWidget {
         ),
       );
   }
+
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final uri = Uri.parse(_privacyUrl);
+    var opened = false;
+
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on Exception {
+      opened = false;
+    }
+
+    if (opened || !context.mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Privacy linki açılamadı'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 1300),
+        ),
+      );
+  }
 }
 
 class _ContactRow extends StatelessWidget {
@@ -911,6 +862,7 @@ class _ContactRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
+    this.trailingIcon = Icons.copy_rounded,
   });
 
   final double scale;
@@ -918,6 +870,7 @@ class _ContactRow extends StatelessWidget {
   final String label;
   final String value;
   final VoidCallback onTap;
+  final IconData trailingIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -986,7 +939,7 @@ class _ContactRow extends StatelessWidget {
               ),
               SizedBox(width: 8 * scale),
               Icon(
-                Icons.copy_rounded,
+                trailingIcon,
                 color: _buttonGreen.withValues(alpha: 0.78),
                 size: 17 * scale,
               ),
